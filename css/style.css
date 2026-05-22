@@ -1,0 +1,637 @@
+
+:root {
+    /* Light Mode (Default) */
+    --bg-color: #f4f6f9;
+    --text-color: #2c3e50;
+    --sidebar-bg: #2c3e50;
+    --sidebar-text: #ecf0f1;
+    --card-bg: #ffffff;
+    --card-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    --input-bg: #ffffff;
+    --input-border: #dfe6e9;
+    --btn-primary: #3498db;
+    --btn-hover: #2980b9;
+    --border-color: #ecf0f1;
+}
+
+/* Dark Mode Variables */
+body.dark-mode {
+    --bg-color: #1a1a1a;
+    --text-color: #ecf0f1;
+    --sidebar-bg: #000000;
+    --sidebar-text: #bdc3c7;
+    --card-bg: #2d2d2d;
+    --card-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    --input-bg: #404040;
+    --input-border: #555555;
+    --btn-primary: #3498db;
+    --btn-hover: #5dade2;
+    --border-color: #404040;
+}
+
+   /* 2. BASIC LAYOUT & RESET */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    margin: 0;
+    padding: 0;
+    transition: background-color 0.3s, color 0.3s;
+}
+
+a { text-decoration: none; color: inherit; }
+
+/*  3. SIDEBAR NAVIGATION  */
+.sidebar {
+    width: 260px;
+    height: 100vh;
+    background-color: var(--sidebar-bg);
+    color: var(--sidebar-text);
+    position: fixed;
+    top: 0;
+    left: 0;
+    padding: 20px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 4px 0 10px rgba(0,0,0,0.1);
+    z-index: 1000;
+}
+
+.sidebar h2 {
+    font-size: 18px;
+    text-align: center;
+    margin-bottom: 40px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    padding-bottom: 20px;
+    line-height: 1.5;
+}
+
+.sidebar a {
+    padding: 15px 20px;
+    display: block;
+    color: var(--sidebar-text);
+    border-radius: 8px;
+    margin-bottom: 10px;
+    transition: all 0.2s;
+    font-weight: 500;
+}
+
+.sidebar a:hover, .sidebar a.active {
+    background-color: var(--btn-primary);
+    color: white;
+    transform: translateX(5px);
+}
+
+.sidebar a i { margin-right: 10px; width: 20px; text-align: center; }
+
+.logout-btn {
+    margin-top: auto;
+    background-color: #c0392b;
+    text-align: center;
+}
+.logout-btn:hover { background-color: #e74c3c !important; }
+
+/*  4. MAIN CONTENT AREA  */
+.main-content {
+    margin-left: 260px;
+    padding: 30px;
+    width: calc(100% - 260px);
+    box-sizing: border-box;
+}
+
+/* Header & Greeting */
+.top-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    background: var(--card-bg);
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: var(--card-shadow);
+}
+
+.greeting-box h2 { margin: 0; font-size: 24px; }
+.date-box { font-size: 14px; opacity: 0.7; margin-top: 5px; }
+
+.theme-toggle {
+    background: transparent;
+    border: 2px solid var(--text-color);
+    color: var(--text-color);
+    padding: 8px 15px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.3s;
+}
+.theme-toggle:hover { background: var(--text-color); color: var(--bg-color); }
+
+/* 5. CARDS & FORMS */
+.card {
+    background: var(--card-bg);
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: var(--card-shadow);
+    margin-bottom: 25px;
+    border: 1px solid var(--border-color);
+}
+
+.form-group { margin-bottom: 20px; }
+label { display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; }
+
+.form-control {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--input-border);
+    background: var(--input-bg);
+    color: var(--text-color);
+    border-radius: 6px;
+    box-sizing: border-box;
+    font-size: 14px;
+}
+.form-control:focus { outline: none; border-color: var(--btn-primary); }
+
+/* Buttons */
+.btn { padding: 10px 15px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; display: inline-block; text-align: center; transition: 0.2s; }
+.btn-view { background: var(--btn-primary); color: white; }
+.btn-edit { background: #f39c12; color: white; }
+.btn-remove { background: #e74c3c; color: white; }
+.btn-submit { background: #27ae60; color: white; width: 100%; padding: 15px; font-size: 16px; font-weight: bold; margin-top: 10px; }
+.btn:hover { opacity: 0.9; transform: translateY(-1px); }
+
+/* 6. TABLES (Manage Users) */
+table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+th, td { padding: 15px; text-align: left; border-bottom: 1px solid var(--border-color); }
+th { background-color: rgba(0,0,0,0.05); color: var(--text-color); font-weight: bold; }
+tr:hover { background-color: rgba(0,0,0,0.02); }
+
+/* 7. MODERN EVALUATION & AI STYLES */
+.eval-grid {
+    display: grid;
+    grid-template-columns: 350px 1fr;
+    gap: 30px;
+    margin-top: 20px;
+}
+
+/* Sidebar Context Card (Left) */
+.context-card {
+    background: var(--card-bg);
+    border-radius: 16px;
+    padding: 25px;
+    box-shadow: var(--card-shadow);
+    border: 1px solid var(--border-color);
+    height: fit-content;
+    position: sticky;
+    top: 20px;
+}
+
+.context-box {
+    background: rgba(128, 128, 128, 0.1);
+    padding: 15px;
+    border-radius: 8px;
+    border-left: 4px solid var(--btn-primary);
+    font-size: 14px;
+    line-height: 1.6;
+    margin-bottom: 15px;
+    color: var(--text-color);
+}
+
+/* Main Evaluation Card (Right) */
+.eval-card {
+    background: var(--card-bg);
+    border-radius: 16px;
+    box-shadow: var(--card-shadow);
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+}
+
+/* AI Banner Header */
+.ai-header-banner {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 20px 30px;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.ai-header-content h3 { margin: 0; font-size: 18px; display: flex; align-items: center; gap: 10px; }
+.ai-header-content p { margin: 5px 0 0 0; font-size: 13px; opacity: 0.85; }
+
+/* Glowing AI Button */
+.btn-ai-glow {
+    background: white;
+    color: #764ba2;
+    border: none;
+    padding: 10px 25px;
+    border-radius: 30px;
+    font-weight: bold;
+    font-size: 14px;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    transition: transform 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.btn-ai-glow:hover { transform: scale(1.05); background: #f8f9fa; }
+
+/* Evaluation Body */
+.eval-body { padding: 30px; }
+
+/* Styled Inputs */
+.modern-input-group { margin-bottom: 25px; }
+.modern-label { display: block; font-weight: 700; margin-bottom: 10px; color: var(--text-color); }
+
+.modern-input, .modern-textarea {
+    width: 100%;
+    padding: 15px;
+    border-radius: 8px;
+    border: 2px solid var(--input-border);
+    background: var(--input-bg);
+    color: var(--text-color);
+    font-size: 14px;
+    transition: border-color 0.3s;
+    box-sizing: border-box;
+}
+.modern-input:focus, .modern-textarea:focus { border-color: #764ba2; outline: none; }
+
+/* Score Circle Visual */
+.score-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    background: var(--input-bg);
+    padding: 15px;
+    border-radius: 12px;
+    border: 1px solid var(--input-border);
+}
+.score-circle-input {
+    width: 60px; height: 60px;
+    border-radius: 50%;
+    border: 3px solid #764ba2;
+    text-align: center;
+    font-size: 24px;
+    font-weight: bold;
+    color: #764ba2;
+    background: transparent;
+}
+.score-circle-input:focus { outline: none; background: rgba(118, 75, 162, 0.1); }
+
+/* Premium Submit Button */
+.btn-submit-premium {
+    background: linear-gradient(90deg, #11998e 0%, #38ef7d 100%);
+    color: white;
+    width: 100%;
+    padding: 15px;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(56, 239, 125, 0.4);
+    transition: transform 0.2s;
+}
+.btn-submit-premium:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(56, 239, 125, 0.6); }
+
+/* Responsive */
+@media (max-width: 900px) {
+    .sidebar { width: 70px; padding: 20px 10px; }
+    .sidebar h2, .sidebar a span { display: none; }
+    .sidebar a { text-align: center; padding: 15px 0; }
+    .sidebar a i { margin: 0; font-size: 20px; }
+    .main-content { margin-left: 70px; width: calc(100% - 70px); }
+    .eval-grid { grid-template-columns: 1fr; }
+}
+
+
+/* 1. Main Layout Grid */
+.eval-grid {
+    display: grid;
+    grid-template-columns: 350px 1fr;
+    gap: 30px;
+    margin-top: 20px;
+}
+
+@media (max-width: 1000px) {
+    .eval-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* 2. Left Panel: Context Card */
+.context-card {
+    background: var(--card-bg);
+    border-radius: 16px;
+    padding: 25px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    border: 1px solid var(--border-color);
+    position: sticky;
+    top: 20px;
+}
+
+.context-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #888;
+    margin-bottom: 8px;
+    font-weight: 700;
+}
+
+.context-box {
+    background: rgba(0,0,0,0.03);
+    padding: 20px;
+    border-radius: 12px;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-color);
+    border-left: 4px solid var(--btn-primary);
+    margin-bottom: 20px;
+}
+
+/* Dark Mode Tweaks for Context Box */
+body.dark-mode .context-box {
+    background: rgba(255,255,255,0.05);
+}
+
+/* 3. Right Panel: The Evaluation Interface */
+.eval-card {
+    background: var(--card-bg);
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    overflow: hidden; /* Keeps header inside */
+    border: 1px solid var(--border-color);
+}
+
+/* 4. The AI Header (The "Wow" Factor) */
+.ai-header-banner {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 25px;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.ai-header-content h3 {
+    margin: 0;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.ai-header-content p {
+    margin: 5px 0 0 0;
+    font-size: 13px;
+    opacity: 0.8;
+}
+
+.btn-ai-glow {
+    background: white;
+    color: #764ba2;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 30px;
+    font-weight: bold;
+    font-size: 13px;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+    .btn-ai-glow:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+        background: #f8f9fa;
+    }
+
+/* 5. Form Styling */
+.eval-body {
+    padding: 30px;
+}
+
+.modern-input-group {
+    margin-bottom: 25px;
+}
+
+.modern-label {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-color);
+    margin-bottom: 8px;
+}
+
+.modern-input, .modern-textarea {
+    width: 100%;
+    padding: 12px 15px;
+    border-radius: 8px;
+    border: 2px solid var(--input-border); 
+    background: var(--input-bg);
+    color: var(--text-color);
+    font-size: 14px;
+    transition: border-color 0.3s;
+}
+
+    .modern-input:focus, .modern-textarea:focus {
+        outline: none;
+        border-color: #764ba2; 
+    }
+
+/* Score Input specific styling */
+.score-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    background: var(--input-bg);
+    padding: 15px;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+}
+
+.score-circle-input {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    border: 3px solid #764ba2;
+    text-align: center;
+    font-size: 24px;
+    font-weight: bold;
+    color: #764ba2;
+    background: transparent;
+}
+
+    .score-circle-input:focus {
+        outline: none;
+        background: rgba(118, 75, 162, 0.1);
+    }
+
+/* Submit Button Area */
+.action-footer {
+    border-top: 1px solid var(--border-color);
+    padding-top: 20px;
+    margin-top: 20px;
+    text-align: right;
+}
+
+.btn-submit-premium {
+    background: linear-gradient(90deg, #11998e 0%, #38ef7d 100%);
+    color: white;
+    border: none;
+    padding: 12px 30px;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(56, 239, 125, 0.4);
+    transition: transform 0.2s;
+}
+
+    .btn-submit-premium:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(56, 239, 125, 0.6);
+    }
+
+/* PROFILE PAGE STYLES */
+.profile-container {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 25px;
+    align-items: start;
+}
+
+/* Left Identity Card */
+.identity-card {
+    background: white;
+    padding: 30px 20px;
+    border-radius: 12px;
+    text-align: center;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+}
+
+.avatar-circle {
+    width: 100px;
+    height: 100px;
+    background: linear-gradient(135deg, #3498db, #2980b9);
+    color: white;
+    font-size: 40px;
+    font-weight: bold;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 15px auto;
+}
+
+.user-role-badge {
+    background: #e8f6f3;
+    color: #1abc9c;
+    padding: 5px 12px;
+    border-radius: 15px;
+    font-size: 12px;
+    font-weight: bold;
+    text-transform: uppercase;
+    display: inline-block;
+    margin-top: 5px;
+}
+
+/* Right Form Card */
+.form-card {
+    background: white;
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+}
+
+.form-section-title {
+    border-bottom: 2px solid #f4f4f4;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+    margin-top: 25px;
+    color: #2c3e50;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+    .form-section-title:first-child {
+        margin-top: 0;
+    }
+
+.form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr; 
+    gap: 20px;
+}
+
+.full-width {
+    grid-column: span 2; 
+}
+
+/* Adjustments for Mobile */
+@media (max-width: 768px) {
+    .profile-container {
+        grid-template-columns: 1fr;
+    }
+
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .full-width {
+        grid-column: span 1;
+    }
+}
+
+/* DARK MODE FIXES FOR PROFILE PAGE */
+
+/* 1. Darken the card backgrounds */
+body.dark-mode .identity-card,
+body.dark-mode .form-card {
+    background-color: #242526;
+    color: #e4e6eb;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+}
+
+/* 2. Fix Input Fields in Dark Mode */
+body.dark-mode .modern-input,
+body.dark-mode .modern-textarea,
+body.dark-mode select.modern-input {
+    background-color: #3a3b3c;
+    border-color: #555;
+    color: #ffffff;
+}
+
+    body.dark-mode .modern-input:focus {
+        border-color: #3498db;
+        background-color: #404142;
+    }
+
+/* 3. Fix Text Colors */
+body.dark-mode .form-section-title {
+    color: #b0b3b8;
+    border-bottom: 2px solid #3e4042;
+}
+
+body.dark-mode .modern-label {
+    color: #b0b3b8;
+}
+
+/* 4. Fix the small details in the Identity Card */
+body.dark-mode .identity-card p {
+    color: #b0b3b8 !important; 
+}
+
+body.dark-mode .identity-card hr {
+    border-top: 1px solid #3e4042 !important;
+}
+
+/* 5. Ensure the sidebar stays dark (just in case) */
+body.dark-mode .sidebar {
+    background-color: #18191a;
+    border-right: 1px solid #333;
+}
