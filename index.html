@@ -1,0 +1,143 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Website Copilot</title>
+    <style>
+        /* Simple styling for the chat widget */
+        #chat-widget {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 300px;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        #chat-header {
+            background: #007bff;
+            color: white;
+            padding: 10px;
+            font-weight: bold;
+        }
+
+        #chat-box {
+            height: 250px;
+            overflow-y: auto;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .msg {
+            margin: 5px 0;
+            padding: 8px;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .user-msg {
+            background: #e1ffc7;
+            align-self: flex-end;
+            text-align: right;
+        }
+
+        .bot-msg {
+            background: #f1f0f0;
+            align-self: flex-start;
+        }
+
+        #input-area {
+            display: flex;
+            padding: 10px;
+        }
+
+        #user-input {
+            flex: 1;
+            padding: 5px;
+        }
+
+        #send-btn {
+            padding: 5px 10px;
+            background: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="chat-widget">
+        <div id="chat-header">Website Copilot</div>
+        <div id="chat-box">
+            <div class="msg bot-msg">Hello! How can I help you today?</div>
+        </div>
+        <div id="input-area">
+            <input type="text" id="user-input" placeholder="Ask me anything...">
+            <button id="send-btn">Send</button>
+        </div>
+    </div>
+
+    <script>
+        const sendBtn = document.getElementById('send-btn');
+        const userInput = document.getElementById('user-input');
+        const chatBox = document.getElementById('chat-box');
+
+        sendBtn.addEventListener('click', sendMessage);
+        userInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+
+        async function sendMessage() {
+            const text = userInput.value.trim();
+            if (!text) return;
+
+            // 1. Display User Message
+            appendMessage(text, 'user-msg');
+            userInput.value = '';
+
+            // 2. Show loading state
+            const loadingMsg = appendMessage('Typing...', 'bot-msg');
+
+            try {
+                // 3. Send to PHP Backend
+                const response = await fetch('chat.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: text })
+                });
+
+                const data = await response.json();
+
+                // 4. Update UI with Bot Response
+                loadingMsg.remove(); // Remove "Typing..."
+                if (data.reply) {
+                    appendMessage(data.reply, 'bot-msg');
+                } else {
+                    appendMessage("Error: " + (data.error || "Unknown error"), 'bot-msg');
+                }
+            } catch (error) {
+                loadingMsg.remove();
+                appendMessage("Connection error.", 'bot-msg');
+            }
+        }
+
+        function appendMessage(text, className) {
+            const div = document.createElement('div');
+            div.className = `msg ${className}`;
+            div.textContent = text;
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight; // Auto scroll to bottom
+            return div;
+        }
+    </script>
+
+</body>
+</html>
