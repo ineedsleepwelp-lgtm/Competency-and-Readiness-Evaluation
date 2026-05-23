@@ -18,7 +18,7 @@ if (empty($userMessage)) {
 }
 
 https://aistudio.google.com/app/apikey
-$apiKey = "AIzaSyBlD0zkrfGDTSNIWIMorEHMqX4ySNAgisc"; 
+$apiKey = getenv('GEMINI_API_KEY'); 
 
 $systemInstruction = "You are the CORE Assistant (Competency and Readiness Evaluation Assistant). 
 Your job is to help students with their academic evaluations. 
