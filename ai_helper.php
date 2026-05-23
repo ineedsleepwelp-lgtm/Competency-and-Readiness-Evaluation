@@ -6,7 +6,7 @@ function generateAIResponse($context_text, $mode = 'evaluator', $pdf_base64 = nu
         return "System Error: The cURL extension is not enabled in your XAMPP php.ini file.";
     }
 
-    $apiKey = "AIzaSyCPmMFZOXfT948-JLrOluD9jpk7cmU6rjw"; 
+    $apiKey = "AIzaSyAEEmOrUmhKh50yKxiYLNH8u3v-powzODo"; 
     $apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" . $apiKey;
 
     if ($mode == 'evaluator') {
