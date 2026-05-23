@@ -27,7 +27,7 @@ If a student asks about the system, explain that this dashboard tracks their com
 
 
 // 4. Send Request to Google Gemini API
-$url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" . $apiKey;
+$url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" . $apiKey;
 
 $data = [
     "contents" => [
