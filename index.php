@@ -15,8 +15,9 @@ if (isset($_SESSION['user_id']) && $_SESSION['role'] === 'admin') {
 $error = "";
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $login_input = $_POST['login_identifier'];
-    $password = $_POST['password'];
+    // Only read these if they actually exist!
+    $login_input = isset($_POST['login_identifier']) ? $_POST['login_identifier'] : '';
+    $password = isset($_POST['password']) ? $_POST['password'] : '';
 
     // Search for either username OR email
     $stmt = $conn->prepare("SELECT * FROM users WHERE username = ? OR email = ?");
