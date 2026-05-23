@@ -18,7 +18,7 @@ if (empty($userMessage)) {
 }
 
 https://aistudio.google.com/app/apikey
-$apiKey = "AIzaSyAEEmOrUmhKh50yKxiYLNH8u3v-powzODo"; 
+$apiKey = "AIzaSyBlD0zkrfGDTSNIWIMorEHMqX4ySNAgisc"; 
 
 $systemInstruction = "You are the CORE Assistant (Competency and Readiness Evaluation Assistant). 
 Your job is to help students with their academic evaluations. 
