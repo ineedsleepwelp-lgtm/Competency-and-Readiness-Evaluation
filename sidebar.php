@@ -2,9 +2,11 @@
 $current_page = basename($_SERVER['PHP_SELF']);
 $user_role = $_SESSION['role'] ?? '';
 
-// Helper function to highlight the active tab
-function isActive($page, $current) {
-    return $page === $current ? 'class="active"' : '';
+// Safety check: Prevent "Cannot redeclare isActive()" fatal error
+if (!function_exists('isActive')) {
+    function isActive($page, $current) {
+        return $page === $current ? 'class="active"' : '';
+    }
 }
 ?>
 
@@ -29,5 +31,5 @@ function isActive($page, $current) {
         <a href="profile.php" <?= isActive('profile.php', $current_page) ?>><i class="fas fa-user"></i> My Profile</a>
     <?php endif; ?>
 
-    <a href="logout.php" class="logout-btn" style="margin-top: auto;"><i class="fas fa-sign-out-alt"></i> Logout</a>
-</div>s
+    <a href="logout.php" class="logout-btn" style="margin-top: auto; background-color: #c0392b; text-align: center;"><i class="fas fa-sign-out-alt"></i> Logout</a>
+</div>
