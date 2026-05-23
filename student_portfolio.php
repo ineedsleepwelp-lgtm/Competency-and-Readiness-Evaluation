@@ -266,33 +266,25 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$user_id ORD
 
             fetch('api_chat.php', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload) 
             })
-            .then(response => response.text()) 
-            .then(text => {
-                try {
-                    const data = JSON.parse(text);
-                    typingIndicator.style.display = 'none';
-                    if(data.error) {
-                        addMessageToUI('System Error', data.error, 'ai');
-                    } else if(data.reply) {
-                        addMessageToUI('Copilot', data.reply, 'ai');
-                    }
-                } catch (parseError) {
-                    typingIndicator.style.display = 'none';
-                    addMessageToUI('System Error', 'Session expired or Server blocked the request. Please refresh the page.', 'ai');
-                    console.error("Raw response:", text);
+            .then(response => response.json()) 
+            .then(data => {
+                typingIndicator.style.display = 'none';
+                if(data.error === "SESSION_EXPIRED") {
+                    addMessageToUI('System', 'Your session has expired. Please refresh the page to continue.', 'ai');
+                    // Optional: window.location.reload(); // Uncomment this to force-refresh automatically
+                } else if(data.reply) {
+                    addMessageToUI('Copilot', data.reply, 'ai');
+                } else {
+                    addMessageToUI('System', 'Error: ' + (data.error || 'Unknown error'), 'ai');
                 }
             })
             .catch(error => {
                 typingIndicator.style.display = 'none';
-                addMessageToUI('System Error', 'Network error connecting to server.', 'ai');
+                addMessageToUI('System', 'Network error. Check your connection.', 'ai');
             });
-        }
 
         function addMessageToUI(sender, text, type) {
             const msgDiv = document.createElement('div');
