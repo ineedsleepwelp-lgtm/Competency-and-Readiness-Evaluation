@@ -231,32 +231,20 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$user_id ORD
     <script>
         const chatHistory = document.getElementById('chatHistory');
         const chatInput = document.getElementById('chatInput');
-        const hiddenContext = document.getElementById('hiddenContext');
         const editorContent = document.getElementById('editorContent');
         const typingIndicator = document.getElementById('typingIndicator');
 
-        // Scroll chat to bottom on page load
-        if(chatHistory) { chatHistory.scrollTop = chatHistory.scrollHeight; }
-
-        // Trigger chat send on Enter key
-        if(chatInput) {
-            chatInput.addEventListener("keypress", function(event) {
-                if (event.key === "Enter") { event.preventDefault(); sendMessage(); }
-            });
-        }
-
-        // Fetch API for Chat
+        // 1. Send Message via Background Fetch (No Reload)
         function sendMessage() {
             const message = chatInput.value.trim();
             const contextText = editorContent.value; 
 
             if (message === "") return;
 
+            // Display user message immediately
             addMessageToUI('You', message, 'user');
             chatInput.value = '';
-            
             typingIndicator.style.display = 'block';
-            chatHistory.scrollTop = chatHistory.scrollHeight;
 
             const payload = {
                 message: message,
@@ -264,47 +252,38 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$user_id ORD
                 mode: 'mentor'
             };
 
+            // Send to api_chat.php (The background worker)
             fetch('api_chat.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload) 
             })
-            .then(response => response.json()) 
+            .then(response => response.json())
             .then(data => {
                 typingIndicator.style.display = 'none';
-                if(data.error === "SESSION_EXPIRED") {
-                    addMessageToUI('System', 'Your session has expired. Please refresh the page to continue.', 'ai');
-                    // Optional: window.location.reload(); // Uncomment this to force-refresh automatically
-                } else if(data.reply) {
+                if(data.reply) {
                     addMessageToUI('Copilot', data.reply, 'ai');
                 } else {
-                    addMessageToUI('System', 'Error: ' + (data.error || 'Unknown error'), 'ai');
+                    addMessageToUI('System', 'Error: ' + (data.error || 'No response'), 'ai');
                 }
             })
             .catch(error => {
                 typingIndicator.style.display = 'none';
-                addMessageToUI('System', 'Network error. Check your connection.', 'ai');
+                addMessageToUI('System', 'Connection error.', 'ai');
             });
+        }
 
+        // 2. Helper to inject HTML into the chat history
         function addMessageToUI(sender, text, type) {
             const msgDiv = document.createElement('div');
             msgDiv.classList.add('message', type);
-            const nameDiv = document.createElement('div');
-            nameDiv.className = 'sender-name'; nameDiv.innerText = sender;
-            const bubbleDiv = document.createElement('div');
-            bubbleDiv.className = 'bubble'; bubbleDiv.innerHTML = text.replace(/\n/g, "<br>");
-            msgDiv.appendChild(nameDiv); msgDiv.appendChild(bubbleDiv);
+            msgDiv.innerHTML = `
+                <div class="sender-name">${sender}</div>
+                <div class="bubble">${text.replace(/\n/g, "<br>")}</div>
+            `;
             chatHistory.appendChild(msgDiv);
             chatHistory.scrollTop = chatHistory.scrollHeight;
         }
-
-        // Loading Screen Overlay logic
-        document.addEventListener('submit', function(e) {
-            if (e.submitter && (e.submitter.name === 'upload_file' || e.submitter.name === 'send_chat')) {
-                document.getElementById('aiLoadingOverlay').style.display = 'flex';
-                hiddenContext.value = editorContent.value;
-            }
-        });
     </script>
 </body>
 </html>
