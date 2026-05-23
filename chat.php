@@ -1,9 +1,12 @@
 <?php
-
-// 1. Security & Headers
 header("Content-Type: application/json");
-header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Methods: POST");
+session_start();
+
+// If user isn't logged in, return a clean JSON error, NOT the login page HTML
+if (!isset($_SESSION['user_id'])) {
+    echo json_encode(["error" => "Session expired. Please refresh the page."]);
+    exit;
+}
 
 // 2. Get the user's message
 $input = json_decode(file_get_contents("php://input"), true);
