@@ -1,6 +1,7 @@
 <?php
-// 1. Safety net: This hides "strict" PHP warnings so your dashboard stays clean
-error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING & ~E_DEPRECATED);
+// TEMPORARY DEBUGGING: Force all fatal errors to print to the screen
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
 session_start();
 include 'db_connect.php';
 
