@@ -1,4 +1,8 @@
 <?php
+// CRITICAL: Stop PHP warnings from printing HTML and breaking the JSON response!
+error_reporting(0);
+ini_set('display_errors', 0);
+
 header("Content-Type: application/json");
 session_start();
 
@@ -11,11 +15,22 @@ $input = json_decode(file_get_contents("php://input"), true);
 $userMessage = $input['message'] ?? '';
 $context = $input['context'] ?? '';
 
-// Grab the key safely from Railway's secret vault!
+// --- MAGIC SECRETS LOADER ---
+// If we are testing locally, look for the hidden .env file
+if (file_exists(__DIR__ . '/.env')) {
+    $lines = file(__DIR__ . '/.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        if (strpos(trim($line), '#') === 0) continue;
+        list($name, $value) = explode('=', $line, 2);
+        $_ENV[trim($name)] = trim($value);
+    }
+}
+
+// Grab the key safely from Railway's vault OR the local .env file
 $apiKey = getenv('GEMINI_API_KEY') ?: ($_ENV['GEMINI_API_KEY'] ?? '');
 
 if (empty($apiKey)) {
-    echo json_encode(["error" => "API Key is missing from Railway Variables!"]);
+    echo json_encode(["error" => "API Key is missing! Check Railway variables or your .env file."]);
     exit;
 }
 
@@ -34,7 +49,7 @@ curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_POST, true);
 curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
 curl_setopt($ch, CURLOPT_HTTPHEADER, ["Content-Type: application/json"]);
-// Bypass SSL issues on some servers
+// Bypass SSL strictness on some servers
 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); 
 
 $response = curl_exec($ch);
@@ -48,7 +63,7 @@ if (isset($decoded['candidates'][0]['content']['parts'][0]['text'])) {
     if(isset($decoded['error']['message'])) {
          echo json_encode(["error" => "Google API Error: " . $decoded['error']['message']]);
     } else {
-         echo json_encode(["error" => "Unknown API Error occurred."]);
+         echo json_encode(["error" => "Unknown API Error. The key might be invalid."]);
     }
 }
 ?>
