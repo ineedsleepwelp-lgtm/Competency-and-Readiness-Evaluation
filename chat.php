@@ -2,40 +2,30 @@
 header("Content-Type: application/json");
 session_start();
 
-// If user isn't logged in, return a clean JSON error, NOT the login page HTML
 if (!isset($_SESSION['user_id'])) {
-    echo json_encode(["error" => "Session expired. Please refresh the page."]);
+    echo json_encode(["error" => "Session expired. Please log in again."]);
     exit;
 }
 
-// 2. Get the user's message
 $input = json_decode(file_get_contents("php://input"), true);
 $userMessage = $input['message'] ?? '';
+$context = $input['context'] ?? '';
 
-if (empty($userMessage)) {
-    echo json_encode(["error" => "No message provided"]);
+// Grab the key safely from Railway's secret vault!
+$apiKey = getenv('GEMINI_API_KEY') ?: ($_ENV['GEMINI_API_KEY'] ?? '');
+
+if (empty($apiKey)) {
+    echo json_encode(["error" => "API Key is missing from Railway Variables!"]);
     exit;
 }
 
-https://aistudio.google.com/app/apikey
-$apiKey = getenv('GEMINI_API_KEY'); 
+$url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" . $apiKey;
 
-$systemInstruction = "You are the CORE Assistant (Competency and Readiness Evaluation Assistant). 
-Your job is to help students with their academic evaluations. 
-You are polite, professional, and encouraging. 
-If a student asks about the system, explain that this dashboard tracks their competency progress and recent submissions.";
-
-
-// 4. Send Request to Google Gemini API
-$url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" . $apiKey;
+$prompt = "You are a helpful teaching assistant. Context: \n" . $context . "\n\nUser Question: " . $userMessage;
 
 $data = [
     "contents" => [
-        [
-            "parts" => [
-                ["text" => $systemInstruction . "\n\nUser: " . $userMessage]
-            ]
-        ]
+        ["parts" => [["text" => $prompt]]]
     ]
 ];
 
@@ -44,22 +34,21 @@ curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_POST, true);
 curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
 curl_setopt($ch, CURLOPT_HTTPHEADER, ["Content-Type: application/json"]);
+// Bypass SSL issues on some servers
+curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); 
 
 $response = curl_exec($ch);
+curl_close($ch);
 
-if (curl_errno($ch)) {
-    echo json_encode(["error" => "Connection Error: " . curl_error($ch)]);
+$decoded = json_decode($response, true);
+
+if (isset($decoded['candidates'][0]['content']['parts'][0]['text'])) {
+    echo json_encode(["reply" => $decoded['candidates'][0]['content']['parts'][0]['text']]);
 } else {
-    $decoded = json_decode($response, true);
-    
-    // Extract the answer from Gemini's specific JSON structure
-    if (isset($decoded['candidates'][0]['content']['parts'][0]['text'])) {
-        $botReply = $decoded['candidates'][0]['content']['parts'][0]['text'];
-        echo json_encode(["reply" => $botReply]);
+    if(isset($decoded['error']['message'])) {
+         echo json_encode(["error" => "Google API Error: " . $decoded['error']['message']]);
     } else {
-        // Log the error for you to see in the browser console
-        echo json_encode(["error" => "API Error", "details" => $decoded]);
+         echo json_encode(["error" => "Unknown API Error occurred."]);
     }
 }
-curl_close($ch);
 ?>
