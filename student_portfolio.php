@@ -258,20 +258,22 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$user_id ORD
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload) 
             })
-            .then(response => response.json())
+            .then(response => response.json()) 
             .then(data => {
                 typingIndicator.style.display = 'none';
-                if(data.reply) {
-                    addMessageToUI('Copilot', data.reply, 'ai');
-                } else {
-                    addMessageToUI('System', 'Error: ' + (data.error || 'No response'), 'ai');
-                }
+            if(data.error === "SESSION_EXPIRED") {
+                 addMessageToUI('System', 'Your session has expired. Please refresh the page to continue.', 'ai');
+            // Optional: window.location.reload(); // Uncomment this to force-refresh automatically
+            } else if(data.reply) {
+                 addMessageToUI('Copilot', data.reply, 'ai');
+            } else {
+                 addMessageToUI('System', 'Error: ' + (data.error || 'Unknown error'), 'ai');
+            }
             })
             .catch(error => {
                 typingIndicator.style.display = 'none';
-                addMessageToUI('System', 'Connection error.', 'ai');
+                addMessageToUI('System', 'Network error. Check your connection.', 'ai');
             });
-        }
 
         // 2. Helper to inject HTML into the chat history
         function addMessageToUI(sender, text, type) {
