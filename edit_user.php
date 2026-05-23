@@ -1,5 +1,7 @@
 <?php
-error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING & ~E_DEPRECATED);
+// Force errors to show so we don't get a blank screen if something else happens!
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
 session_start();
 include __DIR__ . '/db_connect.php';
 
@@ -17,7 +19,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $fullname = trim($_POST['fullname']);
     $email    = trim($_POST['email']);
     $gender   = $_POST['gender'];
-    $birthdate= $_POST['birthdate'];
+    
+    // Fix: Properly handle empty dates to prevent database crashes
+    $birthdate = !empty($_POST['birthdate']) ? $_POST['birthdate'] : NULL;
+    
     $college  = trim($_POST['college']);
     $course   = trim($_POST['course']);
     $year_level = trim($_POST['year_level']);
@@ -26,13 +31,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $partner_school = trim($_POST['partner_school']);
     $role     = $_POST['role'];
     $status   = $_POST['status'];
-    $supervisor_id = $_POST['supervisor_id'];
+    $supervisor_id = intval($_POST['supervisor_id']);
 
     $age = 0;
     if (!empty($birthdate)) {
-        $dob = new DateTime($birthdate);
-        $now = new DateTime('today');
-        $age = $dob->diff($now)->y;
+        try {
+            $dob = new DateTime($birthdate);
+            $now = new DateTime('today');
+            $age = $dob->diff($now)->y;
+        } catch(Exception $e) { 
+            $age = 0; 
+        }
     }
 
     $new_pass = $_POST['new_password'];
@@ -47,12 +56,19 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     }
     $sql .= " WHERE id=?"; $types .= "i"; $params[] = $id;
 
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param($types, ...$params);
-    if($stmt->execute()) {
-        $msg = "User record updated successfully!";
-        $user = $conn->query("SELECT * FROM users WHERE id=$id")->fetch_assoc();
-    } else { $error = "Error: " . $conn->error; }
+    try {
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param($types, ...$params);
+        if($stmt->execute()) {
+            $msg = "Administrator record updated successfully!";
+            $user = $conn->query("SELECT * FROM users WHERE id=$id")->fetch_assoc();
+        } else { 
+            $error = "Error: " . $conn->error; 
+        }
+    } catch (mysqli_sql_exception $e) {
+        // This catches DB errors and prints them in a red box instead of a 500 error!
+        $error = "Database Error: " . $e->getMessage();
+    }
 }
 
 $supervisors = $conn->query("SELECT id, fullname FROM users WHERE role='supervisor' OR role='admin'");
@@ -61,11 +77,12 @@ $supervisors = $conn->query("SELECT id, fullname FROM users WHERE role='supervis
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Edit User (Admin)</title>
+    <title>Edit User (Administrator)</title>
     <link rel="stylesheet" href="css/style.css?v=<?php echo time(); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
-<body>
+<body class="sidebar-collapsed">
+    
     <?php include 'sidebar.php'; ?>
 
     <div class="main-content">
@@ -83,13 +100,13 @@ $supervisors = $conn->query("SELECT id, fullname FROM users WHERE role='supervis
         <div class="card">
             <form method="POST">
                 <div class="form-group" style="border-left: 5px solid #f1c40f; padding: 15px; background: rgba(241, 196, 15, 0.1);">
-                    <h4 style="color:#d35400; margin-top:0;">Admin Controls</h4>
+                    <h4 style="color:#d35400; margin-top:0;">Administrator Controls</h4>
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
                         <div><label>System Role</label>
                             <select name="role" class="form-control">
                                 <option value="student_teacher" <?php if(($user['role']??'')=='student_teacher') echo 'selected'; ?>>Student Teacher</option>
                                 <option value="supervisor" <?php if(($user['role']??'')=='supervisor') echo 'selected'; ?>>Supervisor</option>
-                                <option value="admin" <?php if(($user['role']??'')=='admin') echo 'selected'; ?>>Admin</option>
+                                <option value="admin" <?php if(($user['role']??'')=='admin') echo 'selected'; ?>>Administrator</option>
                             </select>
                         </div>
                         <div><label>Account Status</label>
@@ -125,8 +142,9 @@ $supervisors = $conn->query("SELECT id, fullname FROM users WHERE role='supervis
                         <div class="form-group"><label>Birthdate</label><input type="date" name="birthdate" class="form-control" value="<?php echo htmlspecialchars($user['birthdate'] ?? ''); ?>"></div>
                         <div class="form-group"><label>Gender</label>
                             <select name="gender" class="form-control">
-                                <option <?php if(($user['gender']??'')=='Male') echo 'selected'; ?>>Male</option>
-                                <option <?php if(($user['gender']??'')=='Female') echo 'selected'; ?>>Female</option>
+                                <option value="" disabled>Select...</option>
+                                <option value="Male" <?php if(($user['gender']??'')=='Male') echo 'selected'; ?>>Male</option>
+                                <option value="Female" <?php if(($user['gender']??'')=='Female') echo 'selected'; ?>>Female</option>
                             </select>
                         </div>
                         <div class="form-group"><label>Address</label><input type="text" name="address" class="form-control" value="<?php echo htmlspecialchars($user['address'] ?? ''); ?>"></div>
@@ -148,5 +166,6 @@ $supervisors = $conn->query("SELECT id, fullname FROM users WHERE role='supervis
             </form>
         </div>
     </div>
+    <script src="js/script.js"></script>
 </body>
 </html>
