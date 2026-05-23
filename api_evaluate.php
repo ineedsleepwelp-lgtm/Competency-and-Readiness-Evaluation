@@ -3,7 +3,7 @@ header('Content-Type: application/json');
 session_start();
 include 'db_connect.php';
 
-$apiKey = "AIzaSyCPmMFZOXfT948-JLrOluD9jpk7cmU6rjw"; 
+$apiKey = "AIzaSyAEEmOrUmhKh50yKxiYLNH8u3v-powzODo"; 
 $apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" . $apiKey;
 
 $data = json_decode(file_get_contents("php://input"), true);
