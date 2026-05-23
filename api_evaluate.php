@@ -4,7 +4,7 @@ session_start();
 include 'db_connect.php';
 
 $apiKey = "AIzaSyBlD0zkrfGDTSNIWIMorEHMqX4ySNAgisc"; 
-$apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" . $apiKey;
+$apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" . $apiKey;
 
 $data = json_decode(file_get_contents("php://input"), true);
 $submission_id = $data['submission_id'] ?? 0;
