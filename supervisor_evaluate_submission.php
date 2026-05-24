@@ -4,9 +4,15 @@ include __DIR__ . '/db_connect.php';
 include __DIR__ . '/ai_helper.php';
 
 function extractTextForEvaluation($filePath) {
-    if (!file_exists($filePath)) { return "[SYSTEM ERROR: File not found.]"; }
+    if (!file_exists($filePath)) { return "[ERROR: File not found on server]"; }
+    
     $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
-    $text = "";
+    
+    // IF IT'S A PDF, WE CAN'T READ IT WITH STANDARD PHP
+    if ($ext === 'pdf') {
+        return "[SYSTEM ALERT: PDF uploaded. Our system requires .docx or .txt files for AI analysis. Please download and review manually.]";
+    }
+
     if ($ext === 'docx') {
         if (class_exists('ZipArchive')) {
             $zip = new ZipArchive;
@@ -15,19 +21,14 @@ function extractTextForEvaluation($filePath) {
                     $xml = $zip->getFromIndex($index);
                     $dom = new DOMDocument;
                     $dom->loadXML($xml, LIBXML_NOENT | LIBXML_XINCLUDE | LIBXML_NOERROR | LIBXML_NOWARNING);
-                    $text = strip_tags($dom->saveXML());
+                    return strip_tags($dom->saveXML());
                 }
-                $zip->close();
             }
         }
     } elseif ($ext === 'txt') {
-        $text = file_get_contents($filePath);
-    } elseif ($ext === 'pdf') {
-        return "[SYSTEM ALERT: PDF uploaded. AI cannot natively read PDFs. Review manually.]";
-    } else {
-        $text = "[SYSTEM NOTE: File type .$ext not supported.]";
+        return file_get_contents($filePath);
     }
-    return substr(trim($text), 0, 15000);
+    return "[ERROR: Unsupported file format: $ext]";
 }
 
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'supervisor') { header("Location: index.php"); exit(); }
