@@ -9,6 +9,29 @@ $user_id = $_SESSION['user_id'];
 $msg = "";
 $title_val = ""; $desc_val = "";
 
+// --- AI Chat Submission Internally ---
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['send_chat'])) {
+    $message = $_POST['message'] ?? '';
+    $context = $_POST['context'] ?? '';
+    $mode = 'mentor';
+
+    if (!empty($message)) {
+        $stmt = $conn->prepare("INSERT INTO chat_logs (user_id, sender, message) VALUES (?, 'user', ?)");
+        $stmt->bind_param("is", $user_id, $message);
+        $stmt->execute();
+
+        $full_prompt = "CONTEXT:\n$context\n\nUSER QUESTION:\n$message";
+        $ai_response = generateAIResponse($full_prompt, $mode);
+
+        $stmt = $conn->prepare("INSERT INTO chat_logs (user_id, sender, message) VALUES (?, 'ai', ?)");
+        $stmt->bind_param("is", $user_id, $ai_response);
+        $stmt->execute();
+
+        header("Location: student_portfolio.php");
+        exit();
+    }
+}
+
 // --- Portfolio File Submission ---
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['upload_file'])) {
     $title_val = $_POST['title'];
@@ -51,12 +74,18 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$user_id ORD
     <style>
         /* --- FIXED SIDEBAR & LAYOUT CSS --- */
         body { display: flex !important; min-height: 100vh; overflow-x: hidden; margin: 0; background: #f4f7f6; }
+        
+        /* Force sidebar to act as a normal flex item, locking it to the left */
         .sidebar { width: 250px !important; flex-shrink: 0 !important; position: relative !important; z-index: 1000; min-height: 100vh; }
+        
+        /* Remove any hidden margins from the external style.css to close the gap */
         .main-content { flex: 1 !important; margin-left: 0 !important; padding: 30px !important; width: calc(100% - 250px) !important; transition: none !important; }
         
+        /* Grid Layout */
         .three-col-grid { display: grid; grid-template-columns: 260px 1fr 350px; gap: 20px; align-items: start; margin-top: 15px; }
         @media (max-width: 1200px) { .three-col-grid { grid-template-columns: 1fr; } }
         
+        /* Panels and Cards */
         .info-panel { background: #fff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 20px; margin-bottom: 20px; border-left: 4px solid #3498db; }
         .info-panel.ai-panel { border-left-color: #9b59b6; }
         .info-panel.human-panel { border-left-color: #2ecc71; }
@@ -69,9 +98,10 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$user_id ORD
         .ai-header-banner h3 { margin: 0 0 5px 0; font-size: 18px; }
         .ai-header-banner p { margin: 0; font-size: 13px; opacity: 0.9; }
         
+        /* Chat UI */
         .chat-container { display: flex; flex-direction: column; height: 500px; background: #fdfbfb; }
         .chat-history { flex: 1; overflow-y: auto; padding: 20px; border-bottom: 1px solid #eee; }
-        .chat-input-area { padding: 15px; background: #fff; display: flex; gap: 10px; align-items: center; border-top: 1px solid #eee; }
+        .chat-input-area { padding: 15px; background: #fff; display: flex; gap: 10px; align-items: center; }
         .message { margin-bottom: 15px; display: flex; flex-direction: column; }
         .message.user { align-items: flex-end; }
         .message.ai { align-items: flex-start; }
@@ -81,12 +111,14 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$user_id ORD
         .sender-name { font-size: 11px; margin-bottom: 4px; opacity: 0.6; }
         .typing-indicator { display: none; padding: 10px 20px; font-style: italic; color: #888; font-size: 12px; background:#fff;}
 
+        /* Form elements */
         .modern-input-group { margin-bottom: 15px; }
         .modern-label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 13px; color: #555; }
         .modern-input, .modern-textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-family: inherit; }
         .btn-submit-premium { background: #3498db; color: white; border: none; padding: 12px; border-radius: 4px; cursor: pointer; font-weight: bold; }
         .btn-ai-glow { background: #8e44ad; color: white; border: none; padding: 10px 15px; border-radius: 20px; cursor: pointer; }
 
+        /* Loading Overlay CSS */
         #aiLoadingOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); z-index: 99999; color: white; flex-direction: column; justify-content: center; align-items: center; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         .ai-spinner { border: 6px solid #f3f3f3; border-top: 6px solid #8e44ad; border-radius: 50%; width: 60px; height: 60px; animation: spin 1s linear infinite; margin-bottom: 20px; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -176,10 +208,14 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$user_id ORD
                             <i class="fas fa-circle-notch fa-spin"></i> Copilot is thinking...
                         </div>
                         
-                        <div class="chat-input-area">
-                            <input type="text" id="chatInput" class="modern-input" placeholder="Ask a question..." required style="margin-bottom:0; border-radius:20px;">
-                            <button type="button" onclick="sendMessage()" class="btn-ai-glow"><i class="fas fa-paper-plane"></i></button>
-                        </div>
+                        <form method="POST" id="chatForm" style="margin: 0; border-top: 1px solid #eee;">
+                            <div class="chat-input-area">
+                                <input type="hidden" name="context" id="hiddenContext">
+                                <input type="hidden" name="send_chat" value="1">
+                                <input type="text" name="message" id="chatInput" class="modern-input" placeholder="Ask a question..." required style="margin-bottom:0; border-radius:20px;">
+                                <button type="button" onclick="sendMessage()" class="btn-ai-glow"><i class="fas fa-paper-plane"></i></button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             </div>
@@ -198,25 +234,14 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$user_id ORD
         const editorContent = document.getElementById('editorContent');
         const typingIndicator = document.getElementById('typingIndicator');
 
-        // Scroll to bottom immediately
-        if(chatHistory) { chatHistory.scrollTop = chatHistory.scrollHeight; }
-
-        // Intercept Enter Key to prevent weird browser behavior
-        if(chatInput) {
-            chatInput.addEventListener("keypress", function(event) {
-                if (event.key === "Enter") { 
-                    event.preventDefault(); // This command completely blocks page reloading!
-                    sendMessage(); 
-                }
-            });
-        }
-
+        // 1. Send Message via Background Fetch (No Reload)
         function sendMessage() {
             const message = chatInput.value.trim();
-            const contextText = editorContent ? editorContent.value : ""; 
+            const contextText = editorContent.value; 
 
             if (message === "") return;
 
+            // Display user message immediately
             addMessageToUI('You', message, 'user');
             chatInput.value = '';
             typingIndicator.style.display = 'block';
@@ -227,45 +252,40 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$user_id ORD
                 mode: 'mentor'
             };
 
+            // Send to api_chat.php (The background worker)
             fetch('api_chat.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload) 
             })
-            .then(response => {
-                if (!response.ok) throw new Error('Network error');
-                return response.json();
-            })
+            .then(response => response.json()) 
             .then(data => {
                 typingIndicator.style.display = 'none';
-                if(data.error === "SESSION_EXPIRED") {
-                     addMessageToUI('System', 'Your session has expired. Please refresh the page to continue.', 'ai');
-                } else if(data.reply) {
-                     addMessageToUI('Copilot', data.reply, 'ai');
-                } else {
-                     addMessageToUI('System', 'Error: ' + (data.error || 'Unknown error'), 'ai');
-                }
+            if(data.error === "SESSION_EXPIRED") {
+                 addMessageToUI('System', 'Your session has expired. Please refresh the page to continue.', 'ai');
+            // Optional: window.location.reload(); // Uncomment this to force-refresh automatically
+            } else if(data.reply) {
+                 addMessageToUI('Copilot', data.reply, 'ai');
+            } else {
+                 addMessageToUI('System', 'Error: ' + (data.error || 'Unknown error'), 'ai');
+            }
             })
             .catch(error => {
                 typingIndicator.style.display = 'none';
-                addMessageToUI('System', 'Network error or Server blocked the request.', 'ai');
+                addMessageToUI('System', 'Network error. Check your connection.', 'ai');
             });
-        }
 
+        // 2. Helper to inject HTML into the chat history
         function addMessageToUI(sender, text, type) {
             const msgDiv = document.createElement('div');
             msgDiv.classList.add('message', type);
-            msgDiv.innerHTML = `<div class="sender-name">${sender}</div><div class="bubble">${text.replace(/\n/g, "<br>")}</div>`;
+            msgDiv.innerHTML = `
+                <div class="sender-name">${sender}</div>
+                <div class="bubble">${text.replace(/\n/g, "<br>")}</div>
+            `;
             chatHistory.appendChild(msgDiv);
             chatHistory.scrollTop = chatHistory.scrollHeight;
         }
-
-        // Only show full loading overlay for the Main Form
-        document.addEventListener('submit', function(e) {
-            if (e.target.id === 'mainForm') {
-                document.getElementById('aiLoadingOverlay').style.display = 'flex';
-            }
-        });
     </script>
 </body>
 </html>
