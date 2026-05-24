@@ -83,6 +83,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     }
 }
 $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$supervisor_id ORDER BY created_at ASC");
+
+// --- FILE EXISTENCE CHECKER ---
+$file_url = htmlspecialchars($sub['file_path']);
+$actual_path = __DIR__ . '/' . ltrim(str_replace(['../', '..\\'], '', $sub['file_path']), '/\\');
+$file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
 ?>
 <!DOCTYPE html>
 <html>
@@ -91,12 +96,11 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$supervisor_
     <link rel="stylesheet" href="css/style.css?v=<?php echo time(); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        body { display: flex !important; min-height: 100vh; overflow-x: hidden; margin: 0; background: #f4f7f6; }
-        .sidebar { width: 250px !important; flex-shrink: 0 !important; position: relative !important; z-index: 1000; min-height: 100vh; }
-        .main-content { flex: 1 !important; margin-left: 0 !important; padding: 30px !important; width: calc(100% - 250px) !important; }
+        /* NEW DASHBOARD LAYOUT: Completely eliminates overlapping */
+        body { display: flex; height: 100vh; overflow: hidden; margin: 0; background: #f4f7f6; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .main-content { flex: 1; padding: 30px; overflow-y: auto; height: 100vh; box-sizing: border-box; }
         
-        /* CLEAN 2-COLUMN LAYOUT */
-        .eval-grid { display: grid; grid-template-columns: 1fr 380px; gap: 20px; align-items: start; margin-top: 15px; }
+        .eval-grid { display: grid; grid-template-columns: 1fr 400px; gap: 20px; align-items: start; margin-top: 15px; }
         @media (max-width: 1100px) { .eval-grid { grid-template-columns: 1fr; } }
         
         .context-card, .eval-card { background: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 20px; margin-bottom: 20px; }
@@ -104,9 +108,8 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$supervisor_
         
         .ai-header-banner { padding: 20px; color: white; display: flex; justify-content: space-between; align-items: center; }
         .ai-header-banner h3 { margin: 0 0 5px 0; font-size: 18px; }
-        .ai-header-banner p { margin: 0; font-size: 13px; opacity: 0.9; }
         
-        .chat-container { display: flex; flex-direction: column; height: 600px; background: #fdfbfb; }
+        .chat-container { display: flex; flex-direction: column; height: 500px; background: #fdfbfb; }
         .chat-history { flex: 1; overflow-y: auto; padding: 20px; border-bottom: 1px solid #eee; }
         .chat-input-area { padding: 15px; background: #fff; display: flex; gap: 10px; align-items: center; border-top: 1px solid #eee; }
         .message { margin-bottom: 15px; display: flex; flex-direction: column; }
@@ -124,7 +127,7 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$supervisor_
         .btn-submit-premium { background: #3498db; color: white; border: none; padding: 12px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; }
         .btn-ai-glow { background: #8e44ad; color: white; border: none; padding: 10px 15px; border-radius: 50%; cursor: pointer; }
 
-        #aiLoadingOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); z-index: 99999; color: white; flex-direction: column; justify-content: center; align-items: center; font-family: sans-serif; }
+        #aiLoadingOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); z-index: 99999; color: white; flex-direction: column; justify-content: center; align-items: center; }
         .ai-spinner { border: 6px solid #f3f3f3; border-top: 6px solid #8e44ad; border-radius: 50%; width: 60px; height: 60px; animation: spin 1s linear infinite; margin-bottom: 20px; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
@@ -158,14 +161,25 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$supervisor_
                         <div class="modern-label">Context</div>
                         <div class="context-box" style="background:#f9f9f9; padding:10px; border-radius:4px; font-size:14px;"><?php echo nl2br(htmlspecialchars($sub['description'])); ?></div>
                     </div>
-                    <a href="<?php echo $sub['file_path']; ?>" target="_blank" class="btn btn-view" style="display:block; text-align:center; padding:10px; background:#2c3e50; color:white; text-decoration:none; border-radius:4px;">Download File</a>
+                    
+                    <?php if (empty($sub['file_path'])): ?>
+                        <div style="padding:10px; background:#fdfefd; color:#7f8c8d; text-align:center; border-radius:4px; border:1px dashed #ccc;">No file attached by student.</div>
+                    <?php elseif ($file_is_missing): ?>
+                        <div style="padding:10px; background:#fde3e3; color:#c0392b; text-align:center; border-radius:4px; border:1px dashed #e74c3c; font-size:13px;">
+                            <i class="fas fa-exclamation-triangle"></i> File expired during server restart. Please ask student to re-upload.
+                        </div>
+                    <?php else: ?>
+                        <a href="<?php echo $file_url; ?>" download class="btn btn-view" style="display:block; text-align:center; padding:10px; background:#2c3e50; color:white; text-decoration:none; border-radius:4px;">
+                            <i class="fas fa-download"></i> Download Evidence File
+                        </a>
+                    <?php endif; ?>
                 </div>
 
                 <form method="POST" enctype="multipart/form-data" id="mainForm">
                     <div class="eval-card">
                         <div class="ai-header-banner" style="background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);">
-                            <div class="ai-header-content"><h3><i class="fas fa-magic"></i> AI Auto-Evaluate</h3></div>
-                            <button type="submit" name="generate_ai" class="btn-ai-glow" style="border-radius: 4px; background:#3498db;">Analyze</button>
+                            <div class="ai-header-content"><h3 style="margin:0;"><i class="fas fa-magic"></i> AI Auto-Evaluate</h3></div>
+                            <button type="submit" name="generate_ai" class="btn-ai-glow" style="border-radius: 4px; background:#3498db; padding: 8px 15px;">Analyze</button>
                         </div>
                         <div class="eval-body" style="padding:20px;">
                             <div class="modern-input-group"><label class="modern-label">Evaluation Title</label><input type="text" name="eval_title" class="modern-input" value="Eval: <?php echo htmlspecialchars($sub['title']); ?>" required></div>
@@ -183,7 +197,7 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$supervisor_
             <div class="column-right">
                 <div class="eval-card" style="border:2px solid #8e44ad;">
                     <div class="ai-header-banner" style="background: linear-gradient(135deg, #8e44ad 0%, #9b59b6 100%);">
-                        <div class="ai-header-content"><h3><i class="fas fa-robot"></i> Consultant Chat</h3></div>
+                        <div class="ai-header-content"><h3 style="margin:0;"><i class="fas fa-robot"></i> Consultant Chat</h3></div>
                     </div>
                     <div class="chat-container">
                         <div class="chat-history" id="chatHistory">
@@ -213,7 +227,6 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$supervisor_
         <h2>AI is Processing...</h2>
     </div>
 
-    <script src="js/script.js?v=<?php echo time(); ?>"></script>
     <script>
         const chatHistory = document.getElementById('chatHistory');
         const chatInput = document.getElementById('chatInput');
