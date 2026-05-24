@@ -3,35 +3,6 @@ session_start();
 include __DIR__ . '/db_connect.php';
 include __DIR__ . '/ai_helper.php';
 
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') { header("Location: index.php"); exit(); }
-
-$user_id = $_SESSION['user_id'];
-$msg = "";
-$title_val = ""; $desc_val = "";
-
-// --- AI Chat Submission Internally ---
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['send_chat'])) {
-    $message = $_POST['message'] ?? '';
-    $context = $_POST['context'] ?? '';
-    $mode = 'mentor';
-
-    if (!empty($message)) {
-        $stmt = $conn->prepare("INSERT INTO chat_logs (user_id, sender, message) VALUES (?, 'user', ?)");
-        $stmt->bind_param("is", $user_id, $message);
-        $stmt->execute();
-
-        $full_prompt = "CONTEXT:\n$context\n\nUSER QUESTION:\n$message";
-        $ai_response = generateAIResponse($full_prompt, $mode);
-
-        $stmt = $conn->prepare("INSERT INTO chat_logs (user_id, sender, message) VALUES (?, 'ai', ?)");
-        $stmt->bind_param("is", $user_id, $ai_response);
-        $stmt->execute();
-
-        header("Location: admin_evaluate_submission.php");
-        exit();
-    }
-}
-
 function extractTextForEvaluation($filePath) {
     if (!file_exists($filePath)) { return "[SYSTEM ERROR: File not found.]"; }
     $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
