@@ -83,11 +83,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     }
 }
 $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$supervisor_id ORDER BY created_at ASC");
-
-// --- FILE EXISTENCE CHECKER ---
-$file_url = htmlspecialchars($sub['file_path']);
-$actual_path = __DIR__ . '/' . ltrim(str_replace(['../', '..\\'], '', $sub['file_path']), '/\\');
-$file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
 ?>
 <!DOCTYPE html>
 <html>
@@ -96,20 +91,25 @@ $file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
     <link rel="stylesheet" href="css/style.css?v=<?php echo time(); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        /* NEW DASHBOARD LAYOUT: Completely eliminates overlapping */
+        /* INDESTRUCTIBLE FLEXBOX DASHBOARD LAYOUT */
         body { display: flex; height: 100vh; overflow: hidden; margin: 0; background: #f4f7f6; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         .main-content { flex: 1; padding: 30px; overflow-y: auto; height: 100vh; box-sizing: border-box; }
         
-        .eval-grid { display: grid; grid-template-columns: 1fr 400px; gap: 20px; align-items: start; margin-top: 15px; }
-        @media (max-width: 1100px) { .eval-grid { grid-template-columns: 1fr; } }
+        .eval-grid { display: flex; flex-wrap: wrap; gap: 25px; margin-top: 20px; align-items: flex-start; }
+        .column-left { flex: 1; min-width: 400px; display: flex; flex-direction: column; gap: 20px; }
+        .column-right { width: 380px; flex-shrink: 0; }
+        @media (max-width: 1100px) { .column-right { width: 100%; } }
         
-        .context-card, .eval-card { background: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 20px; margin-bottom: 20px; }
-        .eval-card { padding: 0; overflow: hidden; }
+        .card { background: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 25px; }
+        .eval-card { background: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); overflow: hidden; }
         
         .ai-header-banner { padding: 20px; color: white; display: flex; justify-content: space-between; align-items: center; }
         .ai-header-banner h3 { margin: 0 0 5px 0; font-size: 18px; }
+        .ai-header-banner p { margin: 0; font-size: 13px; opacity: 0.9; }
         
-        .chat-container { display: flex; flex-direction: column; height: 500px; background: #fdfbfb; }
+        .context-box { background: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px solid #e2e8f0; max-height: 300px; overflow-y: auto; line-height: 1.6; word-wrap: break-word; font-size: 14px; margin-bottom: 20px; }
+        
+        .chat-container { display: flex; flex-direction: column; height: 600px; background: #fdfbfb; }
         .chat-history { flex: 1; overflow-y: auto; padding: 20px; border-bottom: 1px solid #eee; }
         .chat-input-area { padding: 15px; background: #fff; display: flex; gap: 10px; align-items: center; border-top: 1px solid #eee; }
         .message { margin-bottom: 15px; display: flex; flex-direction: column; }
@@ -127,7 +127,7 @@ $file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
         .btn-submit-premium { background: #3498db; color: white; border: none; padding: 12px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; }
         .btn-ai-glow { background: #8e44ad; color: white; border: none; padding: 10px 15px; border-radius: 50%; cursor: pointer; }
 
-        #aiLoadingOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); z-index: 99999; color: white; flex-direction: column; justify-content: center; align-items: center; }
+        #aiLoadingOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); z-index: 99999; color: white; flex-direction: column; justify-content: center; align-items: center; font-family: sans-serif; }
         .ai-spinner { border: 6px solid #f3f3f3; border-top: 6px solid #8e44ad; border-radius: 50%; width: 60px; height: 60px; animation: spin 1s linear infinite; margin-bottom: 20px; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
@@ -147,29 +147,25 @@ $file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
 
         <div class="eval-grid">
             <div class="column-left">
-                <div class="context-card">
+                <div class="card">
                     <h3 style="margin-top:0; border-bottom:1px solid #eee; padding-bottom:15px;">
-                        <i class="fas fa-file-alt"></i> Submission
+                        <i class="fas fa-file-alt"></i> Submission Context
                     </h3>
                     <input type="hidden" id="studentContext" value="<?php echo htmlspecialchars($sub['description']); ?>">
                     
                     <div class="modern-input-group">
                         <div class="modern-label">Title</div>
-                        <div style="font-weight:bold;"><?php echo htmlspecialchars($sub['title']); ?></div>
+                        <div style="font-weight:bold; font-size:16px; margin-bottom:10px;"><?php echo htmlspecialchars($sub['title']); ?></div>
                     </div>
                     <div class="modern-input-group">
-                        <div class="modern-label">Context</div>
-                        <div class="context-box" style="background:#f9f9f9; padding:10px; border-radius:4px; font-size:14px;"><?php echo nl2br(htmlspecialchars($sub['description'])); ?></div>
+                        <div class="modern-label">Context Description</div>
+                        <div class="context-box"><?php echo nl2br(htmlspecialchars($sub['description'])); ?></div>
                     </div>
                     
                     <?php if (empty($sub['file_path'])): ?>
-                        <div style="padding:10px; background:#fdfefd; color:#7f8c8d; text-align:center; border-radius:4px; border:1px dashed #ccc;">No file attached by student.</div>
-                    <?php elseif ($file_is_missing): ?>
-                        <div style="padding:10px; background:#fde3e3; color:#c0392b; text-align:center; border-radius:4px; border:1px dashed #e74c3c; font-size:13px;">
-                            <i class="fas fa-exclamation-triangle"></i> File expired during server restart. Please ask student to re-upload.
-                        </div>
+                        <div style="padding:15px; background:#f8f9fa; text-align:center; border-radius:6px; border:1px dashed #ccc; color:#6c757d;">No file was attached by the student.</div>
                     <?php else: ?>
-                        <a href="<?php echo $file_url; ?>" download class="btn btn-view" style="display:block; text-align:center; padding:10px; background:#2c3e50; color:white; text-decoration:none; border-radius:4px;">
+                        <a href="<?php echo htmlspecialchars($sub['file_path']); ?>" target="_blank" download class="btn-submit-premium" style="display:block; text-align:center; text-decoration:none; background:#2c3e50;">
                             <i class="fas fa-download"></i> Download Evidence File
                         </a>
                     <?php endif; ?>
@@ -181,14 +177,21 @@ $file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
                             <div class="ai-header-content"><h3 style="margin:0;"><i class="fas fa-magic"></i> AI Auto-Evaluate</h3></div>
                             <button type="submit" name="generate_ai" class="btn-ai-glow" style="border-radius: 4px; background:#3498db; padding: 8px 15px;">Analyze</button>
                         </div>
-                        <div class="eval-body" style="padding:20px;">
-                            <div class="modern-input-group"><label class="modern-label">Evaluation Title</label><input type="text" name="eval_title" class="modern-input" value="Eval: <?php echo htmlspecialchars($sub['title']); ?>" required></div>
-                            <div class="modern-input-group"><label class="modern-label">Score (1-10)</label>
-                                <div class="score-wrapper"><input type="number" name="score" class="modern-input" min="1" max="10" value="<?php echo htmlspecialchars($suggested_score); ?>" required>
-                                <div style="font-size:13px; opacity:0.7; margin-top:5px;"><?php if($suggested_score) echo "<span style='color:green; font-weight:bold;'>AI Suggestion Applied</span><br>"; ?> 1-4: Developing | 8-10: Distinguished</div></div>
+                        <div class="eval-body" style="padding:25px;">
+                            <div class="modern-input-group">
+                                <label class="modern-label">Evaluation Title</label>
+                                <input type="text" name="eval_title" class="modern-input" value="Eval: <?php echo htmlspecialchars($sub['title']); ?>" required>
                             </div>
-                            <div class="modern-input-group"><label class="modern-label">Feedback</label><textarea name="notes" class="modern-textarea" rows="8"><?php echo htmlspecialchars($ai_suggestion); ?></textarea></div>
-                            <div class="action-footer"><button type="submit" name="submit_grade" class="btn-submit-premium">Submit Final Grade</button></div>
+                            <div class="modern-input-group">
+                                <label class="modern-label">Score (1-10)</label>
+                                <input type="number" name="score" class="modern-input" min="1" max="10" value="<?php echo htmlspecialchars($suggested_score); ?>" required style="max-width: 150px;">
+                                <div style="font-size:13px; opacity:0.7; margin-top:5px;"><?php if($suggested_score) echo "<span style='color:green; font-weight:bold;'>AI Suggestion Applied</span><br>"; ?> 1-4: Developing | 8-10: Distinguished</div>
+                            </div>
+                            <div class="modern-input-group">
+                                <label class="modern-label">Feedback</label>
+                                <textarea name="notes" class="modern-textarea" rows="8"><?php echo htmlspecialchars($ai_suggestion); ?></textarea>
+                            </div>
+                            <button type="submit" name="submit_grade" class="btn-submit-premium">Submit Final Grade</button>
                         </div>
                     </div>
                 </form>
@@ -237,10 +240,11 @@ $file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
         if(chatHistory) { chatHistory.scrollTop = chatHistory.scrollHeight; }
 
         if(chatInput) {
-            chatInput.addEventListener("keypress", function(event) {
+            chatInput.addEventListener("keydown", function(event) {
                 if (event.key === "Enter") { 
                     event.preventDefault(); 
                     sendMessage(); 
+                    return false;
                 }
             });
         }
