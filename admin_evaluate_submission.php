@@ -32,8 +32,7 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') { header("Loc
 
 $admin_id = $_SESSION['user_id'];
 $sub_id = isset($_GET['sub_id']) ? intval($_GET['sub_id']) : 0;
-$ai_suggestion = "";
-$suggested_score = "";
+$ai_suggestion = ""; $suggested_score = "";
 
 $sub_q = $conn->query("SELECT s.*, u.fullname FROM submissions s JOIN users u ON s.user_id = u.id WHERE s.id=$sub_id");
 if($sub_q->num_rows == 0) { header("Location: admin_dashboard.php"); exit(); }
@@ -89,6 +88,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     }
 }
 $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$admin_id ORDER BY created_at ASC");
+
+// --- FILE EXISTENCE CHECKER ---
+$file_url = htmlspecialchars($sub['file_path']);
+$actual_path = __DIR__ . '/' . ltrim(str_replace(['../', '..\\'], '', $sub['file_path']), '/\\');
+$file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
 ?>
 <!DOCTYPE html>
 <html>
@@ -97,19 +101,17 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$admin_id OR
     <link rel="stylesheet" href="css/style.css?v=<?php echo time(); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        /* --- FIXED SIDEBAR & LAYOUT CSS --- */
-        body { display: flex !important; min-height: 100vh; overflow-x: hidden; margin: 0; background: #f4f7f6; }
-        .sidebar { width: 250px !important; flex-shrink: 0 !important; position: relative !important; z-index: 1000; min-height: 100vh; }
-        .main-content { flex: 1 !important; margin-left: 0 !important; padding: 30px !important; width: calc(100% - 250px) !important; transition: none !important; }
+        body { display: flex; height: 100vh; overflow: hidden; margin: 0; background: #f4f7f6; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .main-content { flex: 1; padding: 30px; overflow-y: auto; height: 100vh; box-sizing: border-box; }
         
-        .eval-grid { display: grid; grid-template-columns: 260px 1fr 350px; gap: 20px; align-items: start; margin-top: 15px; }
+        .eval-grid { display: grid; grid-template-columns: 1fr 400px; gap: 20px; align-items: start; margin-top: 15px; }
         @media (max-width: 1200px) { .eval-grid { grid-template-columns: 1fr; } }
         
-        .context-card { background: #fff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 20px; }
-        .eval-card { box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 0; background: #fff; border-radius: 8px; overflow: hidden; }
+        .context-card, .eval-card { background: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 20px; margin-bottom: 20px; }
+        .eval-card { padding: 0; overflow: hidden; }
+        
         .ai-header-banner { padding: 20px; color: white; display: flex; justify-content: space-between; align-items: center; }
         .ai-header-banner h3 { margin: 0 0 5px 0; font-size: 18px; }
-        .ai-header-banner p { margin: 0; font-size: 13px; opacity: 0.9; }
         
         .chat-container { display: flex; flex-direction: column; height: 500px; background: #fdfbfb; }
         .chat-history { flex: 1; overflow-y: auto; padding: 20px; border-bottom: 1px solid #eee; }
@@ -127,10 +129,9 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$admin_id OR
         .modern-label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 13px; color: #555; }
         .modern-input, .modern-textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-family: inherit; }
         .btn-submit-premium { background: #3498db; color: white; border: none; padding: 12px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; }
-        .btn-ai-glow { background: #3498db; color: white; border: none; padding: 10px 15px; border-radius: 20px; cursor: pointer; }
-        .btn-ai-glow:disabled { background: #ccc; cursor: not-allowed; }
+        .btn-ai-glow { background: #3498db; color: white; border: none; padding: 10px 15px; border-radius: 50%; cursor: pointer; }
 
-        #aiLoadingOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); z-index: 99999; color: white; flex-direction: column; justify-content: center; align-items: center; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        #aiLoadingOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); z-index: 99999; color: white; flex-direction: column; justify-content: center; align-items: center; }
         .ai-spinner { border: 6px solid #f3f3f3; border-top: 6px solid #3498db; border-radius: 50%; width: 60px; height: 60px; animation: spin 1s linear infinite; margin-bottom: 20px; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
@@ -142,38 +143,48 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$admin_id OR
     <div class="main-content">
         <div class="top-header" style="display:flex; justify-content:space-between; align-items:center; background:#fff; padding:15px 20px; border-radius:8px; margin-bottom:20px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
             <div class="greeting-box">
-                <h2 style="margin:0;">Admin Evaluation</h2>
+                <h2 style="margin:0;">Administrator Evaluation</h2>
                 <div class="date-box" style="opacity:0.7; font-size:14px;"><?php echo htmlspecialchars($sub['fullname']); ?></div>
             </div>
             <button id="themeToggle" class="theme-toggle" style="background:#ecf0f1; border:none; padding:8px 15px; border-radius:20px; cursor:pointer;"><i class="fas fa-moon"></i> Dark Mode</button>
         </div>
 
         <div class="eval-grid">
-            
-            <div class="context-card">
-                <h3 style="margin-top:0; border-bottom:1px solid #eee; padding-bottom:15px;">
-                    <i class="fas fa-user-graduate"></i> Submission
-                </h3>
-                
-                <input type="hidden" id="studentContext" value="<?php echo htmlspecialchars($sub['description']); ?>">
-                
-                <div class="modern-input-group">
-                    <div class="modern-label">Title</div>
-                    <div style="font-weight:bold;"><?php echo htmlspecialchars($sub['title']); ?></div>
+            <div class="column-left">
+                <div class="context-card">
+                    <h3 style="margin-top:0; border-bottom:1px solid #eee; padding-bottom:15px;">
+                        <i class="fas fa-user-graduate"></i> Submission
+                    </h3>
+                    
+                    <input type="hidden" id="studentContext" value="<?php echo htmlspecialchars($sub['description']); ?>">
+                    
+                    <div class="modern-input-group">
+                        <div class="modern-label">Title</div>
+                        <div style="font-weight:bold;"><?php echo htmlspecialchars($sub['title']); ?></div>
+                    </div>
+                    <div class="modern-input-group">
+                        <div class="modern-label">Context</div>
+                        <div class="context-box" style="background:#f9f9f9; padding:10px; border-radius:4px; font-size:14px;"><?php echo nl2br(htmlspecialchars($sub['description'])); ?></div>
+                    </div>
+                    
+                    <?php if (empty($sub['file_path'])): ?>
+                        <div style="padding:10px; background:#fdfefd; color:#7f8c8d; text-align:center; border-radius:4px; border:1px dashed #ccc;">No file attached by student.</div>
+                    <?php elseif ($file_is_missing): ?>
+                        <div style="padding:10px; background:#fde3e3; color:#c0392b; text-align:center; border-radius:4px; border:1px dashed #e74c3c; font-size:13px;">
+                            <i class="fas fa-exclamation-triangle"></i> File expired during server restart. Please ask student to re-upload.
+                        </div>
+                    <?php else: ?>
+                        <a href="<?php echo $file_url; ?>" download class="btn btn-view" style="display:block; text-align:center; padding:10px; background:#2c3e50; color:white; text-decoration:none; border-radius:4px;">
+                            <i class="fas fa-download"></i> Download Evidence File
+                        </a>
+                    <?php endif; ?>
                 </div>
-                <div class="modern-input-group">
-                    <div class="modern-label">Context</div>
-                    <div class="context-box" style="background:#f9f9f9; padding:10px; border-radius:4px; font-size:14px;"><?php echo nl2br(htmlspecialchars($sub['description'])); ?></div>
-                </div>
-                <a href="<?php echo $sub['file_path']; ?>" target="_blank" class="btn btn-view" style="display:block; text-align:center; padding:10px; background:#2c3e50; color:white; text-decoration:none; border-radius:4px;">View Evidence File</a>
-            </div>
 
-            <div>
-                <form method="POST" enctype="multipart/form-data" style="margin-bottom:30px;">
+                <form method="POST" enctype="multipart/form-data" id="mainForm">
                     <div class="eval-card">
                         <div class="ai-header-banner" style="background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);">
-                            <div class="ai-header-content"><h3><i class="fas fa-magic"></i> AI Auto-Evaluate</h3><p>Generate score & report.</p></div>
-                            <button type="submit" name="generate_ai" class="btn-ai-glow">Analyze</button>
+                            <div class="ai-header-content"><h3 style="margin:0;"><i class="fas fa-magic"></i> AI Auto-Evaluate</h3></div>
+                            <button type="submit" name="generate_ai" class="btn-ai-glow" style="border-radius: 4px; background:#3498db; padding: 8px 15px;">Analyze</button>
                         </div>
                         <div class="eval-body" style="padding:20px;">
                             <div class="modern-input-group"><label class="modern-label">Evaluation Title</label><input type="text" name="eval_title" class="modern-input" value="Admin Eval: <?php echo htmlspecialchars($sub['title']); ?>" required></div>
@@ -191,7 +202,7 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$admin_id OR
             <div class="column-right">
                 <div class="eval-card" style="border:2px solid #3498db;">
                     <div class="ai-header-banner" style="background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);">
-                        <div class="ai-header-content"><h3><i class="fas fa-robot"></i> Consultant Chat</h3></div>
+                        <div class="ai-header-content"><h3 style="margin:0;"><i class="fas fa-robot"></i> Consultant Chat</h3></div>
                     </div>
                     <div class="chat-container">
                         <div class="chat-history" id="chatHistory">
@@ -206,12 +217,10 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$admin_id OR
                         </div>
                         <div class="typing-indicator" id="typingIndicator"><i class="fas fa-circle-notch fa-spin"></i> Consulting...</div>
                         
-                        <form id="chatForm" onsubmit="event.preventDefault(); sendMessage();" style="margin:0;">
-                            <div class="chat-input-area">
-                                <input type="text" id="chatInput" class="modern-input" placeholder="Ask a question..." required style="margin-bottom:0; border-radius:20px;">
-                                <button type="submit" id="sendChatBtn" class="btn-ai-glow" style="border-radius:50%;"><i class="fas fa-paper-plane"></i></button>
-                            </div>
-                        </form>
+                        <div class="chat-input-area">
+                            <input type="text" id="chatInput" class="modern-input" placeholder="Ask a question..." required style="margin-bottom:0; border-radius:20px;">
+                            <button type="button" id="sendChatBtn" onclick="sendMessage()" class="btn-ai-glow" style="background:#3498db;"><i class="fas fa-paper-plane"></i></button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -224,7 +233,6 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$admin_id OR
         <h2>AI is Processing...</h2>
     </div>
 
-    <script src="js/script.js?v=<?php echo time(); ?>"></script>
     <script>
         const chatHistory = document.getElementById('chatHistory');
         const chatInput = document.getElementById('chatInput');
@@ -234,13 +242,20 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$admin_id OR
 
         if(chatHistory) { chatHistory.scrollTop = chatHistory.scrollHeight; }
 
+        if(chatInput) {
+            chatInput.addEventListener("keypress", function(event) {
+                if (event.key === "Enter") { 
+                    event.preventDefault(); 
+                    sendMessage(); 
+                }
+            });
+        }
+
         function sendMessage() {
             const message = chatInput.value.trim();
             if (message === "") return;
 
-            // Lock Input
-            chatInput.disabled = true;
-            sendBtn.disabled = true;
+            chatInput.disabled = true; sendBtn.disabled = true;
 
             addMessageToUI('You', message, 'user');
             chatInput.value = '';
@@ -257,21 +272,15 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$admin_id OR
                 headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                 body: JSON.stringify(payload) 
             })
-            .then(response => response.text())
-            .then(text => {
-                try {
-                    const data = JSON.parse(text);
-                    if(data.error) { addMessageToUI('System Error', data.error, 'ai'); } 
-                    else if(data.reply) { addMessageToUI('Consultant', data.reply, 'ai'); }
-                } catch (e) {
-                    addMessageToUI('System Error', 'Server blocked the request or session expired.', 'ai');
-                }
+            .then(response => response.json())
+            .then(data => {
+                if(data.error) { addMessageToUI('System Error', data.error, 'ai'); } 
+                else if(data.reply) { addMessageToUI('Consultant', data.reply, 'ai'); }
             })
             .catch(error => { addMessageToUI('System Error', 'Connection Error.', 'ai'); })
             .finally(() => {
                 typingIndicator.style.display = 'none';
-                chatInput.disabled = false;
-                sendBtn.disabled = false;
+                chatInput.disabled = false; sendBtn.disabled = false;
                 chatInput.focus();
             });
         }
@@ -285,7 +294,7 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$admin_id OR
         }
 
         document.addEventListener('submit', function(e) {
-            if (e.submitter && (e.submitter.name === 'generate_ai' || e.submitter.name === 'submit_grade')) {
+            if (e.target.id === 'mainForm') {
                 document.getElementById('aiLoadingOverlay').style.display = 'flex';
             }
         });
