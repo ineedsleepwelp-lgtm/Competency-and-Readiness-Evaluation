@@ -1,22 +1,15 @@
 <?php
-// Determine if we are on Localhost or Live Server
-if ($_SERVER['REMOTE_ADDR'] == '127.0.0.1' || $_SERVER['REMOTE_ADDR'] == '::1') {
-    // LOCALHOST SETTINGS (XAMPP)
-    $servername = "localhost";
-    $username = "root";
-    $password = "";
-    $dbname = "competency_db"; 
-} else {
-    // LIVE SETTINGS (InfinityFree)
-    $servername = "sql106.infinityfree.com";
-    $username = "if0_41484863";
-    $password = "YOUR_INFINITY_PASSWORD"; // Put your actual InfinityFree password here
-    $dbname = "if0_41484863_competency_db";
-}
+// Fallbacks included to prevent Railway crashes
+$host = getenv('MYSQLHOST') ?: 'mysql.railway.internal';
+$user = getenv('MYSQLUSER') ?: 'root';
+$pass = getenv('MYSQLPASSWORD');
+$db   = getenv('MYSQLDATABASE') ?: 'railway'; 
+$port = getenv('MYSQLPORT') ?: 3306;
 
-$conn = new mysqli($servername, $username, $password, $dbname);
+// Connect AND select the database in one step
+$conn = mysqli_connect($host, $user, $pass, $db, $port);
 
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
+if (!$conn) {
+    die("Connection failed: " . mysqli_connect_error());
 }
 ?>

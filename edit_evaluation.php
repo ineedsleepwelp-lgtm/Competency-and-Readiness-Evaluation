@@ -52,13 +52,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 </head>
 <body>
 
-    <div class="sidebar">
-        <h2>Competency and Readiness Evaluation</h2>
-        <a href="admin_evaluations.php" class="active"><i class="fas fa-arrow-left"></i> Back to List</a>
-        <a href="admin_dashboard.php"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
-        <a href="admin_manage.php"><i class="fas fa-users"></i> Manage Users</a>
-        <a href="logout.php" class="logout-btn">Logout</a>
-    </div>
+<?php include 'sidebar.php'; ?>
 
     <div class="main-content">
         

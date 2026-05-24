@@ -3,8 +3,8 @@ header('Content-Type: application/json');
 session_start();
 include 'db_connect.php';
 
-$apiKey = "AIzaSyCPmMFZOXfT948-JLrOluD9jpk7cmU6rjw"; 
-$apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" . $apiKey;
+$apiKey = getenv('GEMINI_API_KEY') ?: ($_ENV['GEMINI_API_KEY'] ?? '');
+$apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" . $apiKey;
 
 $data = json_decode(file_get_contents("php://input"), true);
 $submission_id = $data['submission_id'] ?? 0;

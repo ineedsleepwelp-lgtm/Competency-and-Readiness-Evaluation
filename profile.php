@@ -106,12 +106,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         <canvas id="captureCanvas" style="display:none;"></canvas>
     </div>
 
-    <div class="sidebar">
-        <h2>Competency and Readiness</h2>
-        <a href="dashboard.php"><i class="fas fa-chart-line"></i> Dashboard</a>
-        <a href="profile.php" class="active"><i class="fas fa-user"></i> My Profile</a>
-        <a href="logout.php" class="logout-btn">Logout</a>
-    </div>
+<?php include 'sidebar.php'; ?>
 
     <div class="main-content">
         <div class="top-header"><h2>Profile Settings</h2></div>

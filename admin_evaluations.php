@@ -1,4 +1,5 @@
-﻿<?php
+<?php
+error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING & ~E_DEPRECATED);
 session_start();
 include __DIR__ . '/db_connect.php';
 
@@ -11,13 +12,13 @@ if (isset($_GET['delete_id'])) {
     header("Location: admin_evaluations.php"); exit();
 }
 
-// Fetch All Evaluations
+// Fetch All Evaluations - Corrected with 'evaluated_at'
 $query = "
     SELECT e.*, u.fullname AS student_name, u.role, s.title AS submission_title
     FROM evaluations e
     JOIN users u ON e.user_id = u.id
     LEFT JOIN submissions s ON e.submission_id = s.id
-    ORDER BY e.upload_date DESC
+    ORDER BY e.evaluated_at DESC
 ";
 $result = $conn->query($query);
 ?>
@@ -31,19 +32,11 @@ $result = $conn->query($query);
 </head>
 <body>
 
-    <div class="sidebar">
-        <h2>Competency & Readiness</h2>
-        <a href="admin_dashboard.php"><i class="fas fa-chart-line"></i> Dashboard</a>
-        <a href="admin_manage.php"><i class="fas fa-users"></i> Manage Users</a>
-        <a href="admin_evaluations.php" class="active"><i class="fas fa-clipboard-list"></i> Evaluations</a>
-        <a href="logout.php" class="logout-btn">Logout</a>
-    </div>
-
+<?php include 'sidebar.php'; ?>
     <div class="main-content">
         <div class="top-header">
             <div class="greeting-box">
                 <h2>Evaluations List</h2>
-                <div class="date-box">All Records</div>
             </div>
             <button id="themeToggle" class="theme-toggle"><i class="fas fa-moon"></i> Dark Mode</button>
         </div>
@@ -68,13 +61,13 @@ $result = $conn->query($query);
                         </tr>
                     </thead>
                     <tbody>
-                        <?php if($result->num_rows > 0): ?>
+                        <?php if($result && $result->num_rows > 0): ?>
                             <?php while($row = $result->fetch_assoc()): ?>
                             <tr>
-                                <td><?php echo date("M d, Y", strtotime($row['upload_date'])); ?></td>
-                                <td><strong><?php echo htmlspecialchars($row['student_name']); ?></strong></td>
+                                <td><?php echo date("M d, Y", strtotime($row['evaluated_at'] ?? 'now')); ?></td>
+                                <td><strong><?php echo htmlspecialchars($row['student_name'] ?? 'Unknown'); ?></strong></td>
                                 <td>
-                                    <?php if($row['submission_title']): ?>
+                                    <?php if(!empty($row['submission_title'])): ?>
                                         <i class="fas fa-file-alt" style="opacity:0.5;"></i> <?php echo htmlspecialchars($row['submission_title']); ?>
                                     <?php else: ?>
                                         <em style="color:#f39c12;">(Direct Observation)</em>
@@ -82,7 +75,7 @@ $result = $conn->query($query);
                                 </td>
                                 <td>
                                     <?php 
-                                        $score = $row['competency_score'];
+                                        $score = $row['competency_score'] ?? 0;
                                         $color = ($score >= 8) ? '#27ae60' : (($score >= 5) ? '#f39c12' : '#e74c3c');
                                     ?>
                                     <span style="color:<?php echo $color; ?>; font-weight:bold;"><?php echo $score; ?>/10</span>

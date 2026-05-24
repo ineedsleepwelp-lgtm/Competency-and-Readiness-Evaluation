@@ -54,14 +54,7 @@ $file_ext = strtolower(pathinfo($eval['file_path'], PATHINFO_EXTENSION));
 </head>
 <body>
 
-    <div class="sidebar">
-        <h2>Competency and Readiness Evaluation</h2>
-        <a href="dashboard.php"><i class="fas fa-chart-line"></i> Dashboard</a>
-        <a href="user_evaluations.php" class="active"><i class="fas fa-arrow-left"></i> Back to List</a>
-        <a href="student_portfolio.php"><i class="fas fa-folder-open"></i> My Portfolio</a>
-        <a href="profile.php"><i class="fas fa-user"></i> My Profile</a>
-        <a href="logout.php" class="logout-btn">Logout</a>
-    </div>
+<?php include 'sidebar.php'; ?>
 
     <div class="main-content">
         
