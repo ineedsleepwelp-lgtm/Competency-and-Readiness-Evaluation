@@ -1,36 +1,35 @@
 <?php
-// We disable errors so PHP doesn't print raw text and ruin the JSON response
+// Prevent any HTML errors from breaking the JSON response
 error_reporting(0);
 ini_set('display_errors', 0);
 header("Content-Type: application/json");
 session_start();
 
-// RULE: ABSOLUTELY NO header("Location: ...") ALLOWED IN THIS FILE!
-// We only check if ANY user is logged in. We do not restrict by role here.
+// 1. Safe Session Check - Return JSON, NEVER redirect
 if (!isset($_SESSION['user_id'])) {
-    echo json_encode(["error" => "SESSION_EXPIRED"]);
+    echo json_encode(["error" => "SESSION_EXPIRED", "reply" => "Session expired. Please refresh the page."]);
     exit;
 }
 
-// Connect to DB to save the chat history
 include __DIR__ . '/db_connect.php'; 
 
+// 2. Handle BOTH JSON (Student) and FormData (Admin/Supervisor) inputs
 $input = json_decode(file_get_contents("php://input"), true);
-$userMessage = trim($input['message'] ?? '');
-$context = $input['context'] ?? '';
+$userMessage = trim($input['message'] ?? $_POST['message'] ?? '');
+$context = $input['context'] ?? $_POST['context'] ?? '';
 $user_id = $_SESSION['user_id'];
 
 if (empty($userMessage)) {
-    echo json_encode(["error" => "Empty message received."]);
+    echo json_encode(["reply" => "Please enter a message."]);
     exit;
 }
 
-// Save User's Message to Database
+// 3. Save User's Message
 $stmt = $conn->prepare("INSERT INTO chat_logs (user_id, sender, message) VALUES (?, 'user', ?)");
 $stmt->bind_param("is", $user_id, $userMessage);
 $stmt->execute();
 
-// Load environment variables (Local XAMPP support)
+// 4. Load Secrets
 if (file_exists(__DIR__ . '/.env')) {
     $lines = file(__DIR__ . '/.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
     foreach ($lines as $line) {
@@ -41,17 +40,16 @@ if (file_exists(__DIR__ . '/.env')) {
         }
     }
 }
-
-// Fetch API Key from Railway
 $apiKey = getenv('GEMINI_API_KEY') ?: ($_ENV['GEMINI_API_KEY'] ?? '');
+
 if (empty($apiKey)) {
-    echo json_encode(["error" => "API Key is missing. Check your Railway settings."]);
+    echo json_encode(["reply" => "System configuration error: API Key missing."]);
     exit;
 }
 
-// Call Google AI
+// 5. Call Google AI
 $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" . $apiKey;
-$prompt = "Context: \n" . $context . "\n\nUser Question: " . $userMessage;
+$prompt = "Context:\n" . $context . "\n\nUser: " . $userMessage;
 $data = ["contents" => [["parts" => [["text" => $prompt]]]]];
 
 $ch = curl_init($url);
@@ -60,12 +58,12 @@ curl_setopt($ch, CURLOPT_POST, true);
 curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
 curl_setopt($ch, CURLOPT_HTTPHEADER, ["Content-Type: application/json"]);
 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); 
-
 $response = curl_exec($ch);
 curl_close($ch);
+
 $decoded = json_decode($response, true);
 
-// Send Reply and Save AI response to Database
+// 6. Return Reply & Save to DB
 if (isset($decoded['candidates'][0]['content']['parts'][0]['text'])) {
     $reply = $decoded['candidates'][0]['content']['parts'][0]['text'];
     
@@ -75,10 +73,6 @@ if (isset($decoded['candidates'][0]['content']['parts'][0]['text'])) {
 
     echo json_encode(["reply" => $reply]);
 } else {
-    if(isset($decoded['error']['message'])) {
-        echo json_encode(["error" => "Google API Error: " . $decoded['error']['message']]);
-    } else {
-        echo json_encode(["error" => "Unknown Google API Error."]);
-    }
+    echo json_encode(["reply" => "AI Error: Could not generate a response. Please try again."]);
 }
 ?>
