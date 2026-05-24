@@ -1,30 +1,35 @@
 <?php
-// 1. Catch ALL server errors and push them directly to the chat interface
-set_error_handler(function($errno, $errstr, $errfile, $errline) {
-    echo json_encode(['error' => "PHP Error: $errstr in $errfile on line $errline"]);
-    exit;
-});
-set_exception_handler(function($e) {
-    echo json_encode(['error' => "PHP Exception: " . $e->getMessage()]);
-    exit;
-});
-
+// Prevent any HTML errors from breaking the JSON response
 error_reporting(0);
+ini_set('display_errors', 0);
 header("Content-Type: application/json");
 session_start();
 
-// 2. Validate Session
+// 1. Strict JSON Session Check (No 302 Redirects allowed here)
 if (!isset($_SESSION['user_id'])) {
-    echo json_encode(["error" => "SESSION_EXPIRED: Please refresh the page and log in again."]);
+    echo json_encode(["error" => "SESSION_EXPIRED"]);
     exit;
 }
 
-// 3. Read the incoming Chat Data
-$input = json_decode(file_get_contents("php://input"), true);
-$userMessage = $input['message'] ?? '';
-$context = $input['context'] ?? '';
+// 2. Connect to DB to save history
+include __DIR__ . '/db_connect.php'; 
 
-// Load local secrets if testing on XAMPP
+$input = json_decode(file_get_contents("php://input"), true);
+$userMessage = trim($input['message'] ?? '');
+$context = $input['context'] ?? '';
+$user_id = $_SESSION['user_id'];
+
+if (empty($userMessage)) {
+    echo json_encode(["error" => "Empty message"]);
+    exit;
+}
+
+// 3. Save User's Message to the Database
+$stmt = $conn->prepare("INSERT INTO chat_logs (user_id, sender, message) VALUES (?, 'user', ?)");
+$stmt->bind_param("is", $user_id, $userMessage);
+$stmt->execute();
+
+// 4. Load API Key
 if (file_exists(__DIR__ . '/.env')) {
     $lines = file(__DIR__ . '/.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
     foreach ($lines as $line) {
@@ -34,23 +39,16 @@ if (file_exists(__DIR__ . '/.env')) {
     }
 }
 
-// 4. Safely grab the Google API Key
 $apiKey = getenv('GEMINI_API_KEY') ?: ($_ENV['GEMINI_API_KEY'] ?? '');
-
 if (empty($apiKey)) {
-    echo json_encode(["error" => "API Key is missing! Please check your Railway Variables."]);
+    echo json_encode(["error" => "API Key missing."]);
     exit;
 }
 
-// 5. Build the Google AI Request
+// 5. Call Google AI
 $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" . $apiKey;
-$prompt = "You are a helpful teaching assistant. Context: \n" . $context . "\n\nUser Question: " . $userMessage;
-
-$data = [
-    "contents" => [
-        ["parts" => [["text" => $prompt]]]
-    ]
-];
+$prompt = "Context: \n" . $context . "\n\nUser Question: " . $userMessage;
+$data = ["contents" => [["parts" => [["text" => $prompt]]]]];
 
 $ch = curl_init($url);
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -60,31 +58,24 @@ curl_setopt($ch, CURLOPT_HTTPHEADER, ["Content-Type: application/json"]);
 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); 
 
 $response = curl_exec($ch);
-$curl_error = curl_error($ch);
 curl_close($ch);
-
-// 6. Handle specific cURL or Network failures
-if ($response === false) {
-    echo json_encode(["error" => "Server cURL Error: " . $curl_error]);
-    exit;
-}
-
 $decoded = json_decode($response, true);
 
-// 7. Handle completely invalid Google responses
-if ($decoded === null) {
-    echo json_encode(["error" => "Google returned invalid JSON. Raw response: " . substr($response, 0, 100)]);
-    exit;
-}
-
-// 8. Output the final success or specific Google error
+// 6. Return and Save AI Response
 if (isset($decoded['candidates'][0]['content']['parts'][0]['text'])) {
-    echo json_encode(["reply" => $decoded['candidates'][0]['content']['parts'][0]['text']]);
+    $reply = $decoded['candidates'][0]['content']['parts'][0]['text'];
+    
+    // Save AI's Message to the Database
+    $stmt2 = $conn->prepare("INSERT INTO chat_logs (user_id, sender, message) VALUES (?, 'ai', ?)");
+    $stmt2->bind_param("is", $user_id, $reply);
+    $stmt2->execute();
+
+    echo json_encode(["reply" => $reply]);
 } else {
     if(isset($decoded['error']['message'])) {
-         echo json_encode(["error" => "Google API Error: " . $decoded['error']['message']]);
+        echo json_encode(["error" => "Google API Error: " . $decoded['error']['message']]);
     } else {
-         echo json_encode(["error" => "Unknown API Error. Received: " . json_encode($decoded)]);
+        echo json_encode(["error" => "Unknown API Error."]);
     }
 }
 ?>
