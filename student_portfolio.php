@@ -110,172 +110,27 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$user_id ORD
 
         <div class="eval-grid">
             <div style="width: 260px; flex-shrink:0;">
-                <div class="info-panel ai-panel">
-                    <h3><i class="fas fa-robot"></i> AI Pre-Evaluation</h3>
-                    <p>The AI Copilot will generate a preliminary analysis of your portfolio based on the PPST once submitted.</p>
-                    <div class="status-badge" style="background:#e67e22;">Pending Submission</div>
-                </div>
-
-                <div class="info-panel human-panel">
-                    <h3><i class="fas fa-user-tie"></i> Official Evaluation</h3>
-                    <p>Your Cooperating Teacher and Supervisor reviews will appear here.</p>
-                    <div class="status-badge" style="background:#95a5a6;">Awaiting Review</div>
-                </div>
-                
-                <div class="info-panel" style="border-left-color: #34495e;">
-                    <h3><i class="fas fa-info-circle"></i> Submission Guidelines</h3>
-                    <p style="font-size: 13px; color: #666;">Ensure your lesson plan covers all required competencies. Use the AI Copilot on the right to brainstorm or refine your content before submitting.</p>
-                </div>
-            </div>
-
-            <div class="column-left" style="min-width: 0;">
-                <form method="POST" enctype="multipart/form-data" id="mainForm">
-                    <div class="eval-card">
-                        <div class="ai-header-banner" style="background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);">
-                            <div class="ai-header-content">
-                                <h3 style="margin:0;"><i class="fas fa-pen-nib"></i> Lesson Editor</h3>
-                                <p>Draft your work here.</p>
-                            </div>
-                        </div>
-                        <div style="padding: 25px;">
-                            <div class="modern-input-group">
-                                <label class="modern-label">Title</label>
-                                <input type="text" name="title" class="modern-input" value="<?php echo htmlspecialchars($title_val); ?>" required>
-                            </div>
-                            <div class="modern-input-group">
-                                <label class="modern-label">Content (Context for AI)</label>
-                                <textarea name="description" id="editorContent" class="modern-textarea" rows="18" placeholder="Start typing your lesson plan..."><?php echo htmlspecialchars($desc_val); ?></textarea>
-                            </div>
-                            <div class="modern-input-group">
-                                <label class="modern-label">Attach File Evidence</label>
-                                <input type="file" name="file" class="modern-input">
-                            </div>
-                            <button type="submit" name="upload_file" class="btn-submit-premium"><i class="fas fa-paper-plane"></i> Submit Portfolio</button>
-                        </div>
-                    </div>
-                </form>
-            </div>
-
-            <div class="column-right">
-                <div class="eval-card" style="border: 2px solid #8e44ad;">
-                    <div class="ai-header-banner" style="background: linear-gradient(135deg, #8e44ad 0%, #9b59b6 100%);">
-                        <h3 style="margin:0;"><i class="fas fa-robot"></i> Support Copilot</h3>
-                    </div>
-                    <div class="chat-container">
-                        <div class="chat-history" id="chatHistory">
-                            <?php if ($chat_history->num_rows > 0): ?>
-                                <?php while($chat = $chat_history->fetch_assoc()): ?>
-                                    <div class="message <?php echo $chat['sender']; ?>">
-                                        <div class="sender-name"><?php echo ($chat['sender'] == 'user') ? 'You' : 'Copilot'; ?></div>
-                                        <div class="bubble"><?php echo nl2br(htmlspecialchars($chat['message'])); ?></div>
-                                    </div>
-                                <?php endwhile; ?>
-                            <?php else: ?>
-                                <div class="message ai">
-                                    <div class="sender-name">Copilot</div>
-                                    <div class="bubble">Hello! I'm here to support you. Ask me questions about your lesson plan or the PPST.</div>
-                                </div>
-                            <?php endif; ?>
-                        </div>
-                        
-                        <div class="typing-indicator" id="typingIndicator">
-                            <i class="fas fa-circle-notch fa-spin"></i> Copilot is thinking...
-                        </div>
-                        
-                        <div class="chat-input-area">
-                            <input type="text" id="chatInput" class="modern-input" placeholder="Ask a question..." required style="margin-bottom:0; border-radius:20px;">
-                            <button type="button" id="sendChatBtn" onclick="sendMessage()" class="btn-ai-glow"><i class="fas fa-paper-plane"></i></button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <div class="info-panel ai-panel">
+        <h3><i class="fas fa-robot"></i> AI Pre-Evaluation</h3>
+        <p>The AI Copilot will generate a preliminary analysis of your portfolio based on the PPST once submitted.</p>
+        <div class="status-badge" style="background:#e67e22;">Pending Submission</div>
     </div>
 
-    <div id="aiLoadingOverlay">
-        <div class="ai-spinner"></div>
-        <h2>AI is Processing...</h2>
-        <p style="color:#aaa;">Please wait while the Copilot analyzes your request. Do not refresh.</p>
+    <div class="info-panel human-panel">
+        <h3><i class="fas fa-user-tie"></i> Official Evaluation</h3>
+        <p>Your Cooperating Teacher and Supervisor reviews will appear here.</p>
+        <div class="status-badge" style="background:#95a5a6;">Awaiting Review</div>
     </div>
-
-    <script>
-        const chatHistory = document.getElementById('chatHistory');
-        const chatInput = document.getElementById('chatInput');
-        const sendBtn = document.getElementById('sendChatBtn');
-        const editorContent = document.getElementById('editorContent');
-        const typingIndicator = document.getElementById('typingIndicator');
-
-        if(chatHistory) { chatHistory.scrollTop = chatHistory.scrollHeight; }
-
-        if(chatInput) {
-            chatInput.addEventListener("keydown", function(event) {
-                if (event.key === "Enter") { 
-                    event.preventDefault(); 
-                    sendMessage(); 
-                    return false;
-                }
-            });
-        }
-
-        function sendMessage() {
-            const message = chatInput.value.trim();
-            const contextText = editorContent ? editorContent.value : ""; 
-
-            if (message === "") return;
-
-            chatInput.disabled = true; sendBtn.disabled = true;
-
-            addMessageToUI('You', message, 'user');
-            chatInput.value = '';
-            typingIndicator.style.display = 'block';
-
-            const payload = {
-                message: message,
-                context: contextText,
-                mode: 'mentor'
-            };
-
-            fetch('api_chat.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload) 
-            })
-            .then(response => {
-                if (!response.ok) throw new Error('Network error');
-                return response.json();
-            })
-            .then(data => {
-                if(data.error === "SESSION_EXPIRED") {
-                     addMessageToUI('System', 'Your session has expired. Please refresh the page to continue.', 'ai');
-                } else if(data.reply) {
-                     addMessageToUI('Copilot', data.reply, 'ai');
-                } else {
-                     addMessageToUI('System', 'Error: ' + (data.error || 'Unknown error'), 'ai');
-                }
-            })
-            .catch(error => {
-                addMessageToUI('System', 'Network error or Server blocked the request.', 'ai');
-            })
-            .finally(() => {
-                typingIndicator.style.display = 'none';
-                chatInput.disabled = false; sendBtn.disabled = false;
-                chatInput.focus();
-            });
-        }
-
-        function addMessageToUI(sender, text, type) {
-            const msgDiv = document.createElement('div');
-            msgDiv.classList.add('message', type);
-            msgDiv.innerHTML = `<div class="sender-name">${sender}</div><div class="bubble">${text.replace(/\n/g, "<br>")}</div>`;
-            chatHistory.appendChild(msgDiv);
-            chatHistory.scrollTop = chatHistory.scrollHeight;
-        }
-
-        document.addEventListener('submit', function(e) {
-            if (e.target.id === 'mainForm') {
-                document.getElementById('aiLoadingOverlay').style.display = 'flex';
-            }
-        });
-    </script>
-</body>
-</html>
+    
+    <div class="info-panel" style="border-left-color: #34495e;">
+        <h3><i class="fas fa-list-ol"></i> 100-Point Grading Rubric</h3>
+        <p style="font-size: 12px; color: #666; margin-bottom: 8px;">Ensure your lesson plan covers these required competencies:</p>
+        <ul style="font-size: 12px; color: #444; padding-left: 15px; margin: 0; line-height: 1.6;">
+            <li><strong>Objectives (20 pts):</strong> Clear, measurable, HOTS aligned.</li>
+            <li><strong>Content (20 pts):</strong> Accurate, relevant to curriculum.</li>
+            <li><strong>Methodology (30 pts):</strong> Engaging strategies, well-structured flow.</li>
+            <li><strong>Assessment (20 pts):</strong> Valid tools aligned with objectives.</li>
+            <li><strong>Formatting (10 pts):</strong> Professional standard and mechanics.</li>
+        </ul>
+    </div>
+</div>
