@@ -209,10 +209,9 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$user_id ORD
                         </div>
                         
                         <form method="POST" id="chatForm" style="margin: 0; border-top: 1px solid #eee;">
-                            <div class="chat-input-area">
+                            <div class="chat-input-area" style="border-top: 1px solid #eee;">
                                 <input type="hidden" name="context" id="hiddenContext">
-                                <input type="hidden" name="send_chat" value="1">
-                                <input type="text" name="message" id="chatInput" class="modern-input" placeholder="Ask a question..." required style="margin-bottom:0; border-radius:20px;">
+                                <input type="text" id="chatInput" class="modern-input" placeholder="Ask a question..." required style="margin-bottom:0; border-radius:20px;">
                                 <button type="button" onclick="sendMessage()" class="btn-ai-glow"><i class="fas fa-paper-plane"></i></button>
                             </div>
                         </form>
