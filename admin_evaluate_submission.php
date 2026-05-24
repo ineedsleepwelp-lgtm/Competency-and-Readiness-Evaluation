@@ -4,9 +4,13 @@ include __DIR__ . '/db_connect.php';
 include __DIR__ . '/ai_helper.php';
 
 function extractTextForEvaluation($filePath) {
-    if (!file_exists($filePath)) { return "[SYSTEM ERROR: File not found.]"; }
+    if (!file_exists($filePath)) { 
+        return "[SYSTEM ALERT: The physical file was missing from the server disk. It was likely wiped during a cloud server deployment. The student must re-upload this file.]"; 
+    }
+    
     $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
     $text = "";
+    
     if ($ext === 'docx') {
         if (class_exists('ZipArchive')) {
             $zip = new ZipArchive;
@@ -22,10 +26,14 @@ function extractTextForEvaluation($filePath) {
         }
     } elseif ($ext === 'txt') {
         $text = file_get_contents($filePath);
+    } elseif ($ext === 'pdf') {
+        return "[SYSTEM ALERT: The student uploaded a PDF. AI text extraction does not natively support PDFs. Please advise the student to upload .docx or .txt files for auto-analysis, or review the downloaded PDF manually.]";
     } else {
-        $text = "[SYSTEM NOTE: File type .$ext not supported for auto-read.]";
+        $text = "[SYSTEM ALERT: File type .$ext is not supported for AI auto-read.]";
     }
+    
     return substr(trim($text), 0, 15000);
+}
 }
 
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') { header("Location: index.php"); exit(); }
