@@ -34,7 +34,7 @@ ffunction extractTextForEvaluation($filePath) {
     
     return substr(trim($text), 0, 15000);
 }
-}
+
 
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'supervisor') { header("Location: index.php"); exit(); }
 
