@@ -93,7 +93,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $eval_title = $_POST['eval_title']; 
         $score = $_POST['human_total']; 
         
-        // Combine rubric scores and feedback into the notes for DB storage
         $notes = "RUBRIC BREAKDOWN:\nObjectives: " . $_POST['human_obj'] . "/20\nContent: " . $_POST['human_con'] . "/20\nMethodology: " . $_POST['human_meth'] . "/30\nAssessment: " . $_POST['human_ass'] . "/20\nFormatting: " . $_POST['human_fmt'] . "/10\n\nFEEDBACK:\n" . $_POST['notes']; 
         
         $student_id = $sub['user_id'];
@@ -117,6 +116,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     }
 }
 $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$admin_id ORDER BY created_at ASC");
+
+// --- FILE EXISTENCE CHECKER FIX ---
 $file_url = htmlspecialchars($sub['file_path']);
 $actual_path = __DIR__ . '/' . ltrim(str_replace(['../', '..\\'], '', $sub['file_path']), '/\\');
 $file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
@@ -158,9 +159,15 @@ $file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
         .modern-input-group { margin-bottom: 15px; }
         .modern-label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 13px; color: #555; }
         .modern-textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-family: inherit; }
-        .btn-submit-premium { background: #3498db; color: white; border: none; padding: 12px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; }
-        .btn-ai-glow { background: #3498db; color: white; border: none; padding: 10px 15px; border-radius: 50%; cursor: pointer; }
         
+        /* NEW BUTTON STYLES */
+        .action-container { display: flex; flex-direction: column; gap: 15px; margin-top: 20px; border-top: 2px dashed #eee; padding-top: 20px; }
+        .btn-run-ai { background: linear-gradient(135deg, #8e44ad 0%, #9b59b6 100%); color: white; border: none; padding: 15px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 15px; display: flex; justify-content: center; align-items: center; gap: 10px; box-shadow: 0 4px 15px rgba(142, 68, 173, 0.3); transition: transform 0.2s; }
+        .btn-run-ai:hover { transform: translateY(-2px); }
+        .btn-submit-official { background: #27ae60; color: white; border: none; padding: 15px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 15px; display: flex; justify-content: center; align-items: center; gap: 10px; box-shadow: 0 4px 15px rgba(39, 174, 96, 0.3); transition: background 0.2s; }
+        .btn-submit-official:hover { background: #2ecc71; }
+        
+        .btn-ai-glow { background: #3498db; color: white; border: none; padding: 10px 15px; border-radius: 50%; cursor: pointer; }
         #aiLoadingOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); z-index: 99999; color: white; flex-direction: column; justify-content: center; align-items: center; }
         .ai-spinner { border: 6px solid #f3f3f3; border-top: 6px solid #3498db; border-radius: 50%; width: 60px; height: 60px; animation: spin 1s linear infinite; margin-bottom: 20px; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -189,6 +196,10 @@ $file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
                     
                     <?php if (empty($sub['file_path'])): ?>
                         <div style="padding:15px; background:#f8f9fa; text-align:center; border-radius:6px; border:1px dashed #ccc; color:#6c757d;">No file attached.</div>
+                    <?php elseif ($file_is_missing): ?>
+                        <div style="padding:15px; background:#fde3e3; text-align:center; border-radius:6px; border:1px dashed #e74c3c; color:#c0392b;">
+                            <i class="fas fa-exclamation-triangle"></i> This file was deleted during a server update. Please ask the student to re-upload it.
+                        </div>
                     <?php else: ?>
                         <a href="<?php echo $file_url; ?>" download class="btn-submit-premium" style="display:block; text-align:center; text-decoration:none; background:#2c3e50;"><i class="fas fa-download"></i> Download Evidence File</a>
                     <?php endif; ?>
@@ -197,12 +208,14 @@ $file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
                 <form method="POST" enctype="multipart/form-data" id="mainForm">
                     <div class="eval-card">
                         <div class="ai-header-banner" style="background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);">
-                            <div class="ai-header-content"><h3 style="margin:0;"><i class="fas fa-magic"></i> AI 100-Point Auto-Evaluate</h3></div>
-                            <button type="submit" name="generate_ai" class="btn-ai-glow" style="border-radius: 4px; background:#3498db; padding: 8px 15px;">Run AI Analysis</button>
+                            <div class="ai-header-content"><h3 style="margin:0;"><i class="fas fa-tasks"></i> 100-Point Evaluation</h3></div>
                         </div>
                         
                         <div class="eval-body" style="padding:25px;">
-                            <input type="hidden" name="eval_title" value="Admin Official Evaluation">
+                            <div class="modern-input-group">
+                                <label class="modern-label">Evaluation Title</label>
+                                <input type="text" name="eval_title" class="modern-textarea" value="Admin Official Evaluation" required>
+                            </div>
                             
                             <div class="dual-rubric">
                                 <div class="rubric-side">
@@ -232,7 +245,15 @@ $file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
                                 <label class="modern-label">Detailed Feedback</label>
                                 <textarea name="notes" id="feedback_box" class="modern-textarea" rows="8"><?php echo htmlspecialchars($ai_feedback); ?></textarea>
                             </div>
-                            <button type="submit" name="submit_grade" class="btn-submit-premium">Submit Official 100-Point Grade</button>
+                            
+                            <div class="action-container">
+                                <button type="submit" name="generate_ai" class="btn-run-ai">
+                                    <i class="fas fa-magic"></i> Step 1: Run AI Analyzer
+                                </button>
+                                <button type="submit" name="submit_grade" class="btn-submit-official">
+                                    <i class="fas fa-check-circle"></i> Step 2: Submit Official 100-Point Grade
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </form>
@@ -273,23 +294,18 @@ $file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
     </div>
 
     <script>
-        // Rubric Auto-Calculator Math
         const humanInputs = document.querySelectorAll('.human-calc');
         const hTotalDisplay = document.getElementById('h_total_display');
         const hTotalInput = document.getElementById('h_total_input');
 
         function calculateTotal() {
             let total = 0;
-            humanInputs.forEach(input => {
-                total += Number(input.value) || 0;
-            });
+            humanInputs.forEach(input => { total += Number(input.value) || 0; });
             hTotalDisplay.innerText = total;
             hTotalInput.value = total;
         }
 
-        humanInputs.forEach(input => {
-            input.addEventListener('input', calculateTotal);
-        });
+        humanInputs.forEach(input => { input.addEventListener('input', calculateTotal); });
 
         function copyAIScores() {
             document.getElementById('h_obj').value = document.getElementById('ai_obj').value;
@@ -300,7 +316,6 @@ $file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
             calculateTotal();
         }
 
-        // Chat Script
         const chatHistory = document.getElementById('chatHistory');
         const chatInput = document.getElementById('chatInput');
         const sendBtn = document.getElementById('sendChatBtn');
@@ -311,11 +326,7 @@ $file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
 
         if(chatInput) {
             chatInput.addEventListener("keydown", function(event) {
-                if (event.key === "Enter") { 
-                    event.preventDefault(); 
-                    sendMessage(); 
-                    return false;
-                }
+                if (event.key === "Enter") { event.preventDefault(); sendMessage(); return false; }
             });
         }
 
@@ -368,5 +379,4 @@ $file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
         });
     </script>
 </body>
-</html>
 </html>
