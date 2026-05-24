@@ -1,6 +1,6 @@
 <?php
 session_start();
-// Removed the JSON header because we are now doing a normal page redirect
+header('Content-Type: application/json');
 
 ini_set('display_errors', 0);
 error_reporting(E_ALL);
@@ -45,21 +45,24 @@ function extractTextFromFile($filePath) {
 
 // 2. MAIN LOGIC
 $user_id = isset($_SESSION['user_id']) ? $_SESSION['user_id'] : 0;
+$response = ['reply' => 'An error occurred.'];
 
 try {
-    // Using standard $_POST since we are using a real HTML form now
-    $message = $_POST['message'] ?? '';
-    $context = $_POST['context'] ?? '';
-    $mode    = $_POST['mode'] ?? 'mentor';
-    $student_file_path = $_POST['student_file_path'] ?? '';
+    $input = json_decode(file_get_contents('php://input'), true);
+    
+    $message = $_POST['message'] ?? ($input['message'] ?? '');
+    $context = $_POST['context'] ?? ($input['context'] ?? '');
+    $mode    = $_POST['mode'] ?? ($input['mode'] ?? 'mentor');
+    $student_file_path = $_POST['student_file_path'] ?? ($input['student_file_path'] ?? '');
 
     $file_text = ""; 
-    $pdf_base64 = null; 
+    $pdf_base64 = null; // NEW: Holds our PDF data
 
     // Check Chat Upload
     if (isset($_FILES['chat_file']) && $_FILES['chat_file']['error'] == 0) {
         $ext = strtolower(pathinfo($_FILES['chat_file']['name'], PATHINFO_EXTENSION));
         
+        // NEW: If PDF, convert to Base64. Otherwise, extract text.
         if ($ext === 'pdf') {
             $pdf_base64 = base64_encode(file_get_contents($_FILES['chat_file']['tmp_name']));
             $file_text .= "\n\n[SYSTEM: A PDF file has been natively attached for you to analyze.]\n";
@@ -79,6 +82,7 @@ try {
         if (file_exists($full_path)) {
             $ext = strtolower(pathinfo($full_path, PATHINFO_EXTENSION));
             
+            // NEW: If PDF, convert to Base64.
             if ($ext === 'pdf') {
                 $pdf_base64 = base64_encode(file_get_contents($full_path));
                 $file_text .= "\n\n[SYSTEM: The student's PDF portfolio file is attached natively.]\n";
@@ -100,25 +104,21 @@ try {
         
         $full_prompt = "CONTEXT:\n$context\n$file_text\n\nUSER QUESTION:\n$message";
         
+        // NEW: Pass the Base64 PDF to the AI
         $ai_response = generateAIResponse($full_prompt, $mode, $pdf_base64);
 
         $stmt = $conn->prepare("INSERT INTO chat_logs (user_id, sender, message) VALUES (?, 'ai', ?)");
         $stmt->bind_param("is", $user_id, $ai_response);
         $stmt->execute();
+
+        $response = ['reply' => $ai_response];
+    } else {
+        $response = ['reply' => "I didn't receive a message to process."];
     }
 
-} catch (Throwable $e) { // Changed to Throwable to catch severe fatal errors too
-    if ($user_id > 0) {
-        // If there's a PHP error, tell the AI Copilot to print it in the chat box!
-        $error_msg = "System Error: " . $e->getMessage();
-        $stmt = $conn->prepare("INSERT INTO chat_logs (user_id, sender, message) VALUES (?, 'ai', ?)");
-        $stmt->bind_param("is", $user_id, $error_msg);
-        $stmt->execute();
-    }
+} catch (Exception $e) {
+    $response = ['reply' => "Error: " . $e->getMessage()];
 }
 
-// 3. THE MAGIC REDIRECT
-// This sends the browser seamlessly back to the workspace after the AI answers
-header("Location: student_portfolio.php");
-exit();
+echo json_encode($response);
 ?>

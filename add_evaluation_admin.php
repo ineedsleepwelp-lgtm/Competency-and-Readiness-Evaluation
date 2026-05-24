@@ -103,7 +103,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['submit_grade'])) {
 </head>
 <body>
 
-    <?php include 'sidebar.php'; ?>
+    <div class="sidebar">
+        <h2>Competency & Readiness</h2>
+        <a href="admin_evaluations.php"><i class="fas fa-arrow-left"></i> Back to List</a>
+        <a href="logout.php" class="logout-btn">Logout</a>
+    </div>
 
     <div class="main-content">
         <div class="top-header">

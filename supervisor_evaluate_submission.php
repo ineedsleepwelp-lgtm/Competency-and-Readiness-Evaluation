@@ -142,7 +142,11 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$supervisor_
     </style>
 </head>
 <body>
-<?php include 'sidebar.php'; ?>
+    <div class="sidebar">
+        <h2>Competency & Readiness</h2>
+        <a href="supervisor_dashboard.php" class="active"><i class="fas fa-arrow-left"></i> Back</a>
+        <a href="logout.php" class="logout-btn">Logout</a>
+    </div>
 
     <div class="main-content">
         <div class="top-header">
@@ -279,21 +283,5 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$supervisor_
             chatHistory.scrollTop = chatHistory.scrollHeight;
         }
     </script>
-
-    <div id="aiLoadingOverlay">
-    <div class="ai-spinner"></div>
-    <h2 style="margin:0; color:white;">AI is Processing...</h2>
-    <p style="color:#aaa;">Please wait while the Copilot analyzes the document. Do not refresh.</p>
-</div>
-
-<script>
-    // Listen for ANY form submission on the page
-    document.addEventListener('submit', function(e) {
-        // If the button clicked was the "Analyze" or "Submit Portfolio" button
-        if (e.submitter && (e.submitter.name === 'generate_ai' || e.submitter.name === 'upload_file')) {
-            document.getElementById('aiLoadingOverlay').style.display = 'flex';
-        }
-    });
-</script>
 </body>
 </html>

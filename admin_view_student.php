@@ -87,8 +87,13 @@ $history_data = array_reverse($history_data);
 </head>
 <body>
 
-<?php include 'sidebar.php'; ?>
-
+    <div class="sidebar">
+        <h2>Competency and Readiness Evaluation</h2>
+        <a href="admin_dashboard.php" class="active"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+        <a href="admin_manage.php"><i class="fas fa-users"></i> Manage Users</a>
+        <a href="admin_evaluations.php"><i class="fas fa-file-alt"></i> Evaluations</a>
+        <a href="logout.php" class="logout-btn">Logout</a>
+    </div>
 
     <div class="main-content">
         

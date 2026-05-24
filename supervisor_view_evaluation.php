@@ -57,7 +57,15 @@ if($eval['assigned_supervisor_id'] != $supervisor_id && $eval['evaluator_id'] !=
 </head>
 <body>
 
-<?php include 'sidebar.php'; ?>
+    <div class="sidebar">
+        <h2>Competency and Readiness Evaluation</h2>
+        <a href="supervisor_view_student.php?id=<?php echo $eval['user_id']; ?>" class="active">
+            <i class="fas fa-arrow-left"></i> Back to Student
+        </a>
+        <a href="supervisor_dashboard.php"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
+        <a href="profile.php"><i class="fas fa-user"></i> My Profile</a>
+        <a href="logout.php" class="logout-btn">Logout</a>
+    </div>
 
     <div class="main-content">
         

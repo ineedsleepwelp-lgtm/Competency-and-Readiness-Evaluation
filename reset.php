@@ -19,4 +19,22 @@ $conn = new mysqli($servername, $username, $password, $dbname);
 if ($conn->connect_error) {
     die("Connection failed: " . $conn->connect_error);
 }
+
+// 1. We create the hash first
+$new_pass = "admin123"; 
+$hashed_password = password_hash($new_pass, PASSWORD_BCRYPT);
+
+// 2. The SQL Query (Check that your table is actually named 'users')
+// Note: I added quotes around the variables to prevent syntax errors
+$sql = "UPDATE users SET password='$hashed_password' WHERE username='10396886'";
+
+if ($conn->query($sql) === TRUE) {
+    echo "<h3>Success!</h3>";
+    echo "The password for <b>aljonmontecastrotimbreza</b> is now: <b>admin123</b>";
+    echo "<br><br><b>Important:</b> Delete this reset.php file now.";
+} else {
+    echo "Error updating record: " . $conn->error;
+}
+
+$conn->close();
 ?>

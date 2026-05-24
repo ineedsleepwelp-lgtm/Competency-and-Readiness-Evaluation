@@ -1,23 +1,16 @@
 <?php
-// 1. Safety net: This hides "strict" PHP warnings so your dashboard stays clean
-error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING & ~E_DEPRECATED);
 session_start();
 include 'db_connect.php';
 
-// 2. Loop-Breaker: If they aren't an admin, completely destroy the session before kicking them out
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') { 
-    session_unset();
-    session_destroy();
-    header("Location: index.php"); 
-    exit(); 
-}
+// Security: Only Admin
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') { header("Location: index.php"); exit(); }
 
-// --- STATISTICS ---
+// --- STATISTICS ---a
 $q1 = $conn->query("SELECT COUNT(*) as count FROM users WHERE role='student_teacher'");
-$total_students = $q1 ? ($q1->fetch_assoc()['count'] ?? 0) : 0;
+$total_students = $q1->fetch_assoc()['count'];
 
 $q2 = $conn->query("SELECT COUNT(*) as count FROM users WHERE role='supervisor'");
-$total_supervisors = $q2 ? ($q2->fetch_assoc()['count'] ?? 0) : 0;
+$total_supervisors = $q2->fetch_assoc()['count'];
 
 // --- INBOX: Pending Submissions ---
 $sql_subs = "SELECT s.*, u.fullname, u.assigned_supervisor_id 
@@ -29,7 +22,7 @@ $pending_subs = $conn->query($sql_subs);
 
 // --- NEW ALERT: Password Reset Requests ---
 $reset_q = $conn->query("SELECT COUNT(*) as count FROM users WHERE reset_request = 1");
-$reset_count = $reset_q ? ($reset_q->fetch_assoc()['count'] ?? 0) : 0;
+$reset_count = $reset_q->fetch_assoc()['count'];
 
 // --- STANDINGS ---
 $sql_students = "SELECT u.id, u.fullname, u.course, u.year_level,
@@ -72,13 +65,19 @@ $supervisors = $conn->query($sql_supervisors);
 </head>
 <body>
 
-<?php include 'sidebar.php'; ?>
+    <div class="sidebar">
+        <h2>Competency and Readiness Evaluation</h2>
+        <a href="admin_dashboard.php" class="active"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
+        <a href="admin_manage.php"><i class="fas fa-users"></i> Manage Users</a>
+        <a href="admin_evaluations.php"><i class="fas fa-file-alt"></i> Evaluations</a>
+        <a href="logout.php" class="logout-btn">Logout</a>
+    </div>
 
     <div class="main-content">
         
         <div class="top-header">
             <div class="greeting-box">
-                <h2><span id="greetingText">Welcome,</span> <?php echo htmlspecialchars($_SESSION['fullname'] ?? 'Admin'); ?></h2>
+                <h2><span id="greetingText">Welcome,</span> <?php echo htmlspecialchars($_SESSION['fullname']); ?></h2>
                 <div id="currentDate" class="date-box">Loading date...</div>
             </div>
             <button id="themeToggle" class="theme-toggle">
@@ -106,7 +105,7 @@ $supervisors = $conn->query($sql_supervisors);
                 <p>Total Supervisors</p>
             </div>
             <div class="stat-card" style="border-color: #e74c3c;">
-                <h3><?php echo $pending_subs ? $pending_subs->num_rows : 0; ?></h3>
+                <h3><?php echo $pending_subs->num_rows; ?></h3>
                 <p>Pending Submissions</p>
             </div>
         </div>
@@ -115,7 +114,7 @@ $supervisors = $conn->query($sql_supervisors);
             
             <div class="card" style="border-top: 4px solid #c0392b;">
                 <h3><i class="fas fa-inbox"></i> Pending Submissions</h3>
-                <?php if ($pending_subs && $pending_subs->num_rows > 0): ?>
+                <?php if ($pending_subs->num_rows > 0): ?>
                     <table>
                         <thead>
                             <tr>
@@ -127,8 +126,8 @@ $supervisors = $conn->query($sql_supervisors);
                         <tbody>
                             <?php while($sub = $pending_subs->fetch_assoc()): ?>
                             <tr>
-                                <td><strong><?php echo htmlspecialchars($sub['fullname'] ?? 'Unknown'); ?></strong></td>
-                                <td><?php echo htmlspecialchars($sub['title'] ?? 'N/A'); ?></td>
+                                <td><strong><?php echo htmlspecialchars($sub['fullname']); ?></strong></td>
+                                <td><?php echo htmlspecialchars($sub['title']); ?></td>
                                 <td>
                                     <a href="admin_evaluate_submission.php?sub_id=<?php echo $sub['id']; ?>" class="btn btn-edit" style="font-size:12px; padding:5px 10px;">Grade</a>
                                 </td>
@@ -155,17 +154,17 @@ $supervisors = $conn->query($sql_supervisors);
                     </thead>
                     <tbody>
                         <?php 
-                        if ($students && $students->num_rows > 0):
+                        if ($students->num_rows > 0):
                             $rank = 1;
                             while($row = $students->fetch_assoc()): 
-                                $avg = round($row['avg_score'] ?? 0, 1);
+                                $avg = round($row['avg_score'], 1);
                                 $badge = ($avg >= 8) ? 'bg-green' : (($avg >= 5) ? 'bg-yellow' : (($avg > 0) ? 'bg-red' : 'bg-grey'));
                         ?>
                         <tr>
                             <td style="font-weight:bold; opacity:0.6;">#<?php echo $rank++; ?></td>
                             <td>
-                                <strong><?php echo htmlspecialchars($row['fullname'] ?? 'Unknown'); ?></strong><br>
-                                <small style="opacity:0.7;"><?php echo htmlspecialchars($row['course'] ?? 'N/A'); ?></small>
+                                <strong><?php echo htmlspecialchars($row['fullname']); ?></strong><br>
+                                <small style="opacity:0.7;"><?php echo htmlspecialchars($row['course']); ?></small>
                             </td>
                             <td>
                                 <span class="score-badge <?php echo $badge; ?>">
@@ -188,7 +187,7 @@ $supervisors = $conn->query($sql_supervisors);
 
         <div class="card" style="border-top: 4px solid #8e44ad;">
             <h3><i class="fas fa-chalkboard-teacher"></i> Registered Cooperating Teachers (Supervisors)</h3>
-            <?php if ($supervisors && $supervisors->num_rows > 0): ?>
+            <?php if ($supervisors->num_rows > 0): ?>
             <table>
                 <thead>
                     <tr>
@@ -201,10 +200,10 @@ $supervisors = $conn->query($sql_supervisors);
                 <tbody>
                     <?php while($sup = $supervisors->fetch_assoc()): ?>
                     <tr>
-                        <td><strong><?php echo htmlspecialchars($sup['fullname'] ?? 'Unknown'); ?></strong></td>
-                        <td><?php echo htmlspecialchars($sup['email'] ?? 'N/A'); ?></td>
+                        <td><strong><?php echo htmlspecialchars($sup['fullname']); ?></strong></td>
+                        <td><?php echo htmlspecialchars($sup['email']); ?></td>
                         <td>
-                            <?php if(($sup['student_count'] ?? 0) > 0): ?>
+                            <?php if($sup['student_count'] > 0): ?>
                                 <span class="badge" style="background:#2ecc71;">
                                     <?php echo $sup['student_count']; ?> Students
                                 </span>

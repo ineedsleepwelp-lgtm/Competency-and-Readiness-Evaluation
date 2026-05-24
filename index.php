@@ -1,52 +1,56 @@
 <?php
-
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-
 session_start();
-include 'db_connect.php';
 
-// If they are already logged in as admin, send them straight to the dashboard
-if (isset($_SESSION['user_id']) && $_SESSION['role'] === 'admin') {
-    header("Location: admin_dashboard.php");
+include __DIR__ . '/db_connect.php'; 
+
+// Redirect if already logged in
+if (isset($_SESSION['user_id'])) {
+    if ($_SESSION['role'] == 'admin') header("Location: admin_dashboard.php");
+    elseif ($_SESSION['role'] == 'supervisor') header("Location: supervisor_dashboard.php");
+    else header("Location: dashboard.php");
     exit();
 }
 
 $error = "";
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $login_input = $_POST['login_identifier'];
+    $identifier = $_POST['identifier']; 
     $password = $_POST['password'];
 
-    // Search for either username OR email
-    $stmt = $conn->prepare("SELECT * FROM users WHERE username = ? OR email = ?");
-    $stmt->bind_param("ss", $login_input, $login_input);
+    // 1. Check BOTH Email AND Username columns
+    $stmt = $conn->prepare("SELECT * FROM users WHERE email = ? OR username = ?");
+    $stmt->bind_param("ss", $identifier, $identifier);
     $stmt->execute();
     $result = $stmt->get_result();
-    $user = $result->fetch_assoc();
 
-    // Verify user exists and password is correct
-    if ($user && password_verify($password, $user['password'])) {
+    if ($result->num_rows === 1) {
+        $user = $result->fetch_assoc();
         
-        // Check if the account is suspended
-        if (strtolower(trim($user['status'] ?? '')) === 'suspended') {
-            $error = "This account is suspended. Please contact the administrator.";
-        } else {
-            // Set session variables
-            $_SESSION['user_id'] = $user['id'];
-            $_SESSION['role'] = $user['role'];
-            $_SESSION['fullname'] = $user['fullname'];
+        // 2. Verify Password
+        if (password_verify($password, $user['password'])) {
             
-            // Redirect based on role
-            if ($user['role'] === 'admin') {
-                header("Location: admin_dashboard.php");
+            if($user['status'] == 'suspended') {
+                $error = "Your account has been suspended. Please contact the administrator.";
             } else {
-                header("Location: dashboard.php"); // Send students/supervisors to their dashboard
+                $_SESSION['user_id'] = $user['id'];
+                $_SESSION['role'] = $user['role'];
+                $_SESSION['fullname'] = $user['fullname'];
+                
+                // Redirect based on Role
+                if ($user['role'] == 'admin') {
+                    header("Location: admin_dashboard.php");
+                } elseif ($user['role'] == 'supervisor') {
+                    header("Location: supervisor_dashboard.php");
+                } else {
+                    header("Location: dashboard.php");
+                }
+                exit();
             }
-            exit();
+        } else {
+            $error = "Incorrect password.";
         }
     } else {
-        $error = "Invalid login credentials.";
+        $error = "It seems that you don't have an account with us. Create now.";
     }
 }
 ?>
@@ -54,30 +58,84 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Login - Competency and Readiness Evaluation</title>
-    <link rel="stylesheet" href="css/style.css">
+    <title>Login - Competency Evaluation</title>
+    <link rel="stylesheet" href="css/style.css?v=<?php echo time(); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        body { display: flex; justify-content: center; align-items: center; height: 100vh; background-color: var(--bg-color, #f4f7f6); margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        .login-box { background: var(--card-bg, #fff); padding: 40px; border-radius: 8px; box-shadow: var(--card-shadow, 0 4px 15px rgba(0,0,0,0.1)); width: 100%; max-width: 400px; text-align: center; }
-        .login-box h2 { margin-top: 0; color: var(--text-color, #333); margin-bottom: 25px; }
-        .form-control { width: 100%; padding: 12px; margin-bottom: 20px; border: 1px solid var(--border-color, #ccc); border-radius: 4px; box-sizing: border-box; background: var(--input-bg, #fff); color: var(--text-color, #333); }
-        .btn-submit { width: 100%; padding: 12px; background: #2980b9; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold; transition: background 0.3s; }
-        .btn-submit:hover { background: #2471a3; }
+        body {
+            background-color: #f4f6f9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .login-card {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+        .logo-area { font-size: 40px; color: #3498db; margin-bottom: 20px; }
+        .login-title { font-size: 24px; font-weight: bold; margin-bottom: 10px; color: #333; }
+        .login-subtitle { font-size: 14px; color: #7f8c8d; margin-bottom: 30px; }
+        
+        .form-group { margin-bottom: 20px; text-align: left; }
+        .form-control {
+            width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;
+            box-sizing: border-box;
+        }
+        
+        .btn-login {
+            width: 100%; padding: 12px;
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white; border: none; border-radius: 6px;
+            font-size: 16px; font-weight: bold; cursor: pointer; transition: all 0.3s;
+        }
+        .btn-login:hover { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(52, 152, 219, 0.3); }
+        
+        .alert-error {
+            background: #fadbd8; color: #c0392b; padding: 10px;
+            border-radius: 6px; font-size: 14px; margin-bottom: 20px; border: 1px solid #e74c3c;
+        }
+        .footer-links { margin-top: 20px; font-size: 13px; }
+        .footer-links a { color: #3498db; text-decoration: none; }
+        .footer-links a:hover { text-decoration: underline; }
     </style>
 </head>
-<body class="light-mode">
-    <div class="login-box">
-        <h2>System Login</h2>
-        <?php if($error) echo "<p style='color:#e74c3c; background:#fdedec; padding:10px; border-radius:4px; font-size:14px; margin-bottom:20px;'><i class='fas fa-exclamation-circle'></i> $error</p>"; ?>
-        
-       <form method="POST">
-            <input type="text" name="login_identifier" class="form-control" placeholder="Username or Email" required>
-            <input type="password" name="password" class="form-control" placeholder="Password" required>
-            <button type="submit" class="btn-submit">Sign In</button>
-            
-            <a href="register.php" style="display:block; margin-top:15px; color:#2980b9; text-decoration:none; font-size:14px;">Don't have an account? Register here</a>
+<body>
+
+    <div class="login-card">
+        <div class="logo-area"><i class="fas fa-graduation-cap"></i></div>
+        <div class="login-title">Welcome Back</div>
+        <div class="login-subtitle">Sign in to access your account</div>
+
+        <?php if($error): ?>
+            <div class="alert-error"><i class="fas fa-exclamation-circle"></i> <?php echo $error; ?></div>
+        <?php endif; ?>
+
+        <form method="POST">
+            <div class="form-group">
+                <label style="font-weight:bold; font-size:12px; color:#555; text-transform:uppercase; display:block; margin-bottom:5px;">Email or Username</label>
+                <input type="text" name="identifier" class="form-control" placeholder="Enter email or username" required autofocus>
+            </div>
+
+            <div class="form-group">
+                <label style="font-weight:bold; font-size:12px; color:#555; text-transform:uppercase; display:block; margin-bottom:5px;">Password</label>
+                <input type="password" name="password" class="form-control" placeholder="Enter your password" required>
+            </div>
+
+            <button type="submit" class="btn-login">Login</button>
         </form>
+
+        <div class="footer-links">
+            <a href="register.php">Create an Account</a>
+        </div>
     </div>
+
 </body>
 </html>
