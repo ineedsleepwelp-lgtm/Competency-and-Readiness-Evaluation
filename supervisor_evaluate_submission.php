@@ -14,17 +14,23 @@ function extractTextForEvaluation($filePath) {
     }
 
     if ($ext === 'docx') {
-        if (class_exists('ZipArchive')) {
-            $zip = new ZipArchive;
-            if ($zip->open($filePath) === TRUE) {
-                if (($index = $zip->locateName('word/document.xml')) !== false) {
-                    $xml = $zip->getFromIndex($index);
-                    $dom = new DOMDocument;
-                    $dom->loadXML($xml, LIBXML_NOENT | LIBXML_XINCLUDE | LIBXML_NOERROR | LIBXML_NOWARNING);
-                    $text = strip_tags($dom->saveXML());
-                }
-                $zip->close();
+        if (!class_exists('ZipArchive')) {
+            return "[SYSTEM ALERT: The PHP ZipArchive extension is disabled on this server. The system cannot pry open DOCX files to read the text inside.]";
+        }
+        
+        $zip = new ZipArchive;
+        if ($zip->open($filePath) === TRUE) {
+            if (($index = $zip->locateName('word/document.xml')) !== false) {
+                $xml = $zip->getFromIndex($index);
+                $dom = new DOMDocument;
+                $dom->loadXML($xml, LIBXML_NOENT | LIBXML_XINCLUDE | LIBXML_NOERROR | LIBXML_NOWARNING);
+                $text = strip_tags($dom->saveXML());
+            } else {
+                return "[SYSTEM ALERT: The DOCX file was opened, but the internal document structure is empty or invalid.]";
             }
+            $zip->close();
+        } else {
+            return "[SYSTEM ALERT: Failed to open DOCX file. It may be corrupted or securely locked.]";
         }
     } elseif ($ext === 'txt') {
         $text = file_get_contents($filePath);
@@ -35,8 +41,13 @@ function extractTextForEvaluation($filePath) {
     // Scrub all invisible/bad characters that crash the Google API
     $text = preg_replace('/[\x00-\x1F\x7F]/u', ' ', $text); 
     $text = mb_convert_encoding($text, 'UTF-8', 'UTF-8');
+    $text = trim($text);
     
-    return substr(trim($text), 0, 15000); 
+    if (empty($text)) {
+        return "[SYSTEM ALERT: The file was opened successfully, but no readable text was found inside.]";
+    }
+    
+    return substr($text, 0, 15000); 
 }
 
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'supervisor') { header("Location: index.php"); exit(); }
@@ -50,6 +61,28 @@ $sub = $sub_q->fetch_assoc();
 
 $ai_scores = ['obj' => '', 'con' => '', 'meth' => '', 'ass' => '', 'fmt' => '', 'total' => ''];
 $ai_feedback = "";
+
+// --- SYNCHRONOUS CHAT LOGIC ---
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['send_chat'])) {
+    $message = trim($_POST['message'] ?? '');
+    $context = $_POST['context'] ?? '';
+    
+    if (!empty($message)) {
+        $stmt = $conn->prepare("INSERT INTO chat_logs (user_id, sender, message) VALUES (?, 'user', ?)");
+        $stmt->bind_param("is", $supervisor_id, $message);
+        $stmt->execute();
+
+        $full_prompt = "Context:\n$context\n\nUser Question: $message";
+        $ai_response = generateAIResponse($full_prompt, 'consultant');
+
+        $stmt = $conn->prepare("INSERT INTO chat_logs (user_id, sender, message) VALUES (?, 'ai', ?)");
+        $stmt->bind_param("is", $supervisor_id, $ai_response);
+        $stmt->execute();
+
+        header("Location: " . $_SERVER['REQUEST_URI']);
+        exit();
+    }
+}
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     if (isset($_POST['generate_ai'])) {
@@ -144,7 +177,7 @@ $file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
         .eval-grid { display: flex; flex-wrap: wrap; gap: 25px; margin-top: 20px; align-items: flex-start; }
         .column-left { flex: 1; min-width: 500px; display: flex; flex-direction: column; gap: 20px; }
         .column-right { width: 380px; flex-shrink: 0; }
-        .card { background: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 25px; }
+        .card { background: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 25px; box-sizing: border-box;}
         .eval-card { background: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); overflow: hidden; }
         .ai-header-banner { padding: 20px; color: white; display: flex; justify-content: space-between; align-items: center; }
         
@@ -161,10 +194,11 @@ $file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
         .message { margin-bottom: 15px; display: flex; flex-direction: column; }
         .message.user { align-items: flex-end; }
         .message.ai { align-items: flex-start; }
-        .bubble { max-width: 85%; padding: 12px 16px; border-radius: 12px; font-size: 14px; line-height: 1.5; }
+        .bubble { max-width: 85%; padding: 12px 16px; border-radius: 12px; font-size: 14px; line-height: 1.5; word-wrap: break-word; }
         .message.user .bubble { background: linear-gradient(135deg, #8e44ad 0%, #9b59b6 100%); color: white; border-bottom-right-radius: 2px; }
         .message.ai .bubble { background: #e9ecef; color: #333; border-bottom-left-radius: 2px; }
         .sender-name { font-size: 11px; margin-bottom: 4px; opacity: 0.6; }
+        
         .modern-input-group { margin-bottom: 15px; }
         .modern-label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 13px; color: #555; }
         .modern-textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-family: inherit; }
@@ -198,7 +232,7 @@ $file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
             <div class="column-left">
                 <div class="card">
                     <h3 style="margin-top:0; border-bottom:1px solid #eee; padding-bottom:15px;"><i class="fas fa-file-alt"></i> Submission Context</h3>
-                    <input type="hidden" id="studentContext" value="<?php echo htmlspecialchars($sub['description']); ?>">
+                    
                     <div style="font-weight:bold; font-size:16px; margin-bottom:10px;"><?php echo htmlspecialchars($sub['title']); ?></div>
                     <div style="background:#f9f9f9; padding:10px; border-radius:4px; font-size:14px; margin-bottom:15px;"><?php echo nl2br(htmlspecialchars($sub['description'])); ?></div>
                     
@@ -209,7 +243,11 @@ $file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
                             <i class="fas fa-exclamation-triangle"></i> This file was deleted during a server update. Please ask the student to re-upload it.
                         </div>
                     <?php else: ?>
-                        <a href="<?php echo $file_url; ?>" download class="btn-submit-premium" style="display:block; text-align:center; text-decoration:none; background:#2c3e50;"><i class="fas fa-download"></i> Download Evidence File</a>
+                        <div style="margin-top: 15px; width: 100%;">
+                            <a href="<?php echo $file_url; ?>" download class="btn-submit-premium" style="display:block; text-align:center; text-decoration:none; background:#2c3e50; padding:12px; box-sizing: border-box; width: 100%;">
+                                <i class="fas fa-download"></i> Download Evidence File
+                            </a>
+                        </div>
                     <?php endif; ?>
                 </div>
 
@@ -237,7 +275,7 @@ $file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
                                 </div>
 
                                 <div class="rubric-side" style="border-color:#3498db; background:#f0f8ff;">
-                                    <h4 style="margin-top:0; color:#2980b9; border-bottom:1px solid #3498db; padding-bottom:5px;">Supervisor Official</h4>
+                                    <h4 style="margin-top:0; color:#2980b9; border-bottom:1px solid #3498db; padding-bottom:5px;">Step 1: Supervisor Official Grade</h4>
                                     <div class="rubric-row"><span>1. Objectives (20)</span> <input type="number" name="human_obj" class="rubric-input human-calc" id="h_obj" max="20" required></div>
                                     <div class="rubric-row"><span>2. Content (20)</span> <input type="number" name="human_con" class="rubric-input human-calc" id="h_con" max="20" required></div>
                                     <div class="rubric-row"><span>3. Methodology (30)</span> <input type="number" name="human_meth" class="rubric-input human-calc" id="h_meth" max="30" required></div>
@@ -256,10 +294,10 @@ $file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
                             
                             <div class="action-container">
                                 <button type="submit" name="generate_ai" class="btn-run-ai">
-                                    <i class="fas fa-magic"></i> Step 1: Run AI Analyzer
+                                    <i class="fas fa-magic"></i> Step 2: Run AI Analyzer (Requires Official Grade to be filled)
                                 </button>
                                 <button type="submit" name="submit_grade" class="btn-submit-official">
-                                    <i class="fas fa-check-circle"></i> Step 2: Submit Official 100-Point Grade
+                                    <i class="fas fa-check-circle"></i> Step 3: Submit Final Grade & Finish
                                 </button>
                             </div>
                         </div>
@@ -280,15 +318,17 @@ $file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
                                     <div class="bubble"><?php echo nl2br(htmlspecialchars($chat['message'])); ?></div>
                                 </div>
                             <?php endwhile; else: ?>
-                                <div class="message ai"><div class="sender-name">Consultant</div><div class="bubble">Hello Supervisor. I can read the attached description. How can I help?</div></div>
+                                <div class="message ai"><div class="sender-name">Consultant</div><div class="bubble">Hello Supervisor. I can read the student's context description. How can I help?</div></div>
                             <?php endif; ?>
                         </div>
-                        <div class="typing-indicator" id="typingIndicator"><i class="fas fa-circle-notch fa-spin"></i> Consulting...</div>
                         
-                        <div class="chat-input-area">
-                            <input type="text" id="chatInput" class="modern-input" placeholder="Ask a question..." required style="margin-bottom:0; border-radius:20px;">
-                            <button type="button" id="sendChatBtn" onclick="sendMessage()" class="btn-ai-glow"><i class="fas fa-paper-plane"></i></button>
-                        </div>
+                        <form method="POST" id="chatForm" style="margin: 0; padding: 0;">
+                            <div class="chat-input-area">
+                                <input type="hidden" name="context" value="STUDENT SUBMISSION:\n<?php echo htmlspecialchars($sub['description']); ?>">
+                                <input type="text" name="message" class="modern-textarea" placeholder="Ask a question..." required style="margin-bottom:0; border-radius:20px; padding:10px;">
+                                <button type="submit" name="send_chat" class="btn-ai-glow" style="background:#8e44ad;"><i class="fas fa-paper-plane"></i></button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             </div>
@@ -298,7 +338,7 @@ $file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
 
     <div id="aiLoadingOverlay">
         <div class="ai-spinner"></div>
-        <h2>AI is Calculating 100-Point Rubric...</h2>
+        <h2 id="loadingText">Processing...</h2>
     </div>
 
     <script>
@@ -325,65 +365,20 @@ $file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
         }
 
         const chatHistory = document.getElementById('chatHistory');
-        const chatInput = document.getElementById('chatInput');
-        const sendBtn = document.getElementById('sendChatBtn');
-        const studentContext = document.getElementById('studentContext');
-        const typingIndicator = document.getElementById('typingIndicator');
-
         if(chatHistory) { chatHistory.scrollTop = chatHistory.scrollHeight; }
 
-        if(chatInput) {
-            chatInput.addEventListener("keydown", function(event) {
-                if (event.key === "Enter") { event.preventDefault(); sendMessage(); return false; }
-            });
-        }
-
-        function sendMessage() {
-            const message = chatInput.value.trim();
-            if (message === "") return;
-
-            chatInput.disabled = true; sendBtn.disabled = true;
-
-            addMessageToUI('You', message, 'user');
-            chatInput.value = '';
-            typingIndicator.style.display = 'block';
-
-            const payload = {
-                message: message,
-                context: "STUDENT SUBMISSION:\n" + (studentContext ? studentContext.value : ""),
-                mode: 'consultant'
-            };
-
-            fetch('api_chat.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload) 
-            })
-            .then(response => response.json())
-            .then(data => {
-                if(data.error) { addMessageToUI('System Error', data.error, 'ai'); } 
-                else if(data.reply) { addMessageToUI('Consultant', data.reply, 'ai'); }
-            })
-            .catch(error => { addMessageToUI('System Error', 'Connection Error.', 'ai'); })
-            .finally(() => {
-                typingIndicator.style.display = 'none';
-                chatInput.disabled = false; sendBtn.disabled = false;
-                chatInput.focus();
-            });
-        }
-
-        function addMessageToUI(sender, text, type) {
-            const msgDiv = document.createElement('div');
-            msgDiv.classList.add('message', type);
-            msgDiv.innerHTML = `<div class="sender-name">${sender}</div><div class="bubble">${text.replace(/\n/g, "<br>")}</div>`;
-            chatHistory.appendChild(msgDiv);
-            chatHistory.scrollTop = chatHistory.scrollHeight;
-        }
-
+        // Handles loading screens universally AFTER HTML5 validation passes
         document.addEventListener('submit', function(e) {
-            if (e.target.id === 'mainForm' && e.submitter.name === 'generate_ai') {
-                document.getElementById('aiLoadingOverlay').style.display = 'flex';
+            if (e.target.id === 'mainForm') {
+                if (e.submitter && e.submitter.name === 'generate_ai') {
+                    document.getElementById('loadingText').innerText = 'AI is Calculating 100-Point Rubric...';
+                } else {
+                    document.getElementById('loadingText').innerText = 'Saving Evaluation...';
+                }
+            } else if (e.target.id === 'chatForm') {
+                document.getElementById('loadingText').innerText = 'Consulting AI...';
             }
+            document.getElementById('aiLoadingOverlay').style.display = 'flex';
         });
     </script>
 </body>
