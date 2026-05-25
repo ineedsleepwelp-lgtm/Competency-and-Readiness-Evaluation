@@ -4,36 +4,46 @@ include __DIR__ . '/db_connect.php';
 include_once __DIR__ . '/ai_helper.php'; 
 
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'student_teacher') { header("Location: index.php"); exit(); }
-
 $user_id = $_SESSION['user_id'];
-$msg = "";
-$title_val = ""; $desc_val = "";
+$msg = ""; $title_val = ""; $desc_val = ""; 
+$is_editing = false;
+$edit_id = isset($_GET['edit_id']) ? intval($_GET['edit_id']) : 0;
 
-// --- SYNCHRONOUS CHAT LOGIC ---
+// LOAD DATA IF EDITING
+if ($edit_id > 0) {
+    $check = $conn->query("SELECT * FROM submissions WHERE id=$edit_id AND user_id=$user_id AND status='pending'");
+    if ($check->num_rows > 0) {
+        $edit_data = $check->fetch_assoc();
+        $title_val = $edit_data['title'];
+        $desc_val = $edit_data['description'];
+        $is_editing = true;
+    } else {
+        $edit_id = 0; // Invalid edit request
+    }
+}
+
+// SYNCHRONOUS CHAT LOGIC
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['send_chat'])) {
     $message = trim($_POST['message'] ?? '');
     $context = $_POST['context'] ?? '';
-    
     if (!empty($message)) {
         $stmt = $conn->prepare("INSERT INTO chat_logs (user_id, sender, message) VALUES (?, 'user', ?)");
-        $stmt->bind_param("is", $user_id, $message);
-        $stmt->execute();
-
-        $full_prompt = "Context:\n$context\n\nUser Question: $message";
-        $ai_response = generateAIResponse($full_prompt, 'mentor');
-
+        $stmt->bind_param("is", $user_id, $message); $stmt->execute();
+        $ai_response = generateAIResponse("Context:\n$context\n\nUser Question: $message", 'mentor');
         $stmt = $conn->prepare("INSERT INTO chat_logs (user_id, sender, message) VALUES (?, 'ai', ?)");
-        $stmt->bind_param("is", $user_id, $ai_response);
-        $stmt->execute();
-
-        header("Location: " . $_SERVER['REQUEST_URI']);
-        exit();
+        $stmt->bind_param("is", $user_id, $ai_response); $stmt->execute();
+        
+        // Return to same state (edit or new)
+        $redirect = "student_portfolio.php";
+        if(isset($_POST['edit_id']) && $_POST['edit_id'] > 0) { $redirect .= "?edit_id=" . $_POST['edit_id']; }
+        header("Location: " . $redirect); exit();
     }
 }
 
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['upload_file'])) {
     $title_val = $_POST['title'];
     $desc_val = $_POST['description'];
+    $edit_id_post = isset($_POST['edit_id']) ? intval($_POST['edit_id']) : 0;
     
     $target_file = ""; 
     if (!empty($_FILES['file']['name'])) {
@@ -42,25 +52,37 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['upload_file'])) {
         move_uploaded_file($_FILES["file"]["tmp_name"], $target_file);
     }
 
-    $chat_transcript = "";
-    $get_chats = $conn->query("SELECT * FROM chat_logs WHERE user_id=$user_id ORDER BY created_at ASC");
-    if ($get_chats->num_rows > 0) {
-        while ($chat = $get_chats->fetch_assoc()) {
-            $sender_name = ($chat['sender'] == 'user') ? 'Student' : 'AI Copilot';
-            $chat_transcript .= "[" . $chat['created_at'] . "] " . $sender_name . ":\n" . $chat['message'] . "\n\n";
+    if ($edit_id_post > 0) {
+        // UPDATE EXISTING
+        if ($target_file !== "") {
+            $stmt = $conn->prepare("UPDATE submissions SET title=?, description=?, file_path=? WHERE id=? AND user_id=?");
+            $stmt->bind_param("sssii", $title_val, $desc_val, $target_file, $edit_id_post, $user_id);
+        } else {
+            $stmt = $conn->prepare("UPDATE submissions SET title=?, description=? WHERE id=? AND user_id=?");
+            $stmt->bind_param("ssii", $title_val, $desc_val, $edit_id_post, $user_id);
+        }
+        $stmt->execute();
+        $msg = "Success! Your submission has been updated.";
+        $is_editing = true; $edit_id = $edit_id_post;
+    } else {
+        // INSERT NEW
+        $chat_transcript = "";
+        $get_chats = $conn->query("SELECT * FROM chat_logs WHERE user_id=$user_id ORDER BY created_at ASC");
+        if ($get_chats->num_rows > 0) {
+            while ($chat = $get_chats->fetch_assoc()) {
+                $sender_name = ($chat['sender'] == 'user') ? 'Student' : 'AI Copilot';
+                $chat_transcript .= "[" . $chat['created_at'] . "] " . $sender_name . ":\n" . $chat['message'] . "\n\n";
+            }
+        }
+        $stmt = $conn->prepare("INSERT INTO submissions (user_id, title, description, file_path, chat_transcript) VALUES (?, ?, ?, ?, ?)");
+        $stmt->bind_param("issss", $user_id, $title_val, $desc_val, $target_file, $chat_transcript);
+        if($stmt->execute()) { 
+            $msg = "Success! Your new portfolio has been submitted."; 
+            $title_val = ""; $desc_val = ""; 
+            $conn->query("DELETE FROM chat_logs WHERE user_id=$user_id");
         }
     }
-
-    $stmt = $conn->prepare("INSERT INTO submissions (user_id, title, description, file_path, chat_transcript) VALUES (?, ?, ?, ?, ?)");
-    $stmt->bind_param("issss", $user_id, $title_val, $desc_val, $target_file, $chat_transcript);
-    
-    if($stmt->execute()) { 
-        $msg = "Success! Your work and chat history have been submitted."; 
-        $title_val = ""; $desc_val = ""; 
-        $conn->query("DELETE FROM chat_logs WHERE user_id=$user_id");
-    }
 }
-
 $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$user_id ORDER BY created_at ASC");
 ?>
 <!DOCTYPE html>
@@ -75,14 +97,11 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$user_id ORD
         .student-grid { display: grid; grid-template-columns: 280px minmax(350px, 1fr) 380px; gap: 25px; margin-top: 20px; align-items: start; }
         @media (max-width: 1200px) { .student-grid { grid-template-columns: 1fr; } }
         
-        .card { background: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 25px; }
-        .eval-card { background: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); overflow: hidden; }
+        .card, .eval-card { background: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); overflow: hidden; }
         .info-panel { background: #fff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 20px; border-left: 4px solid #3498db; margin-bottom: 20px; }
         .info-panel.ai-panel { border-left-color: #9b59b6; }
         .info-panel.human-panel { border-left-color: #2ecc71; }
-        .info-panel h3 { font-size: 13px; color: #7f8c8d; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; border-bottom: 1px solid #f0f0f0; padding-bottom: 8px; }
-        .info-panel p { font-size: 14px; color: #333; line-height: 1.5; margin:0; }
-        .status-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; background: #f1c40f; color: #fff; margin-top: 10px; }
+        .info-panel h3 { font-size: 13px; color: #7f8c8d; text-transform: uppercase; margin-bottom: 10px; border-bottom: 1px solid #f0f0f0; padding-bottom: 8px; }
         
         .ai-header-banner { padding: 20px; color: white; display: flex; justify-content: space-between; align-items: center; }
         .chat-container { display: flex; flex-direction: column; height: 600px; background: #fdfbfb; }
@@ -98,10 +117,8 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$user_id ORD
         
         .modern-input-group { margin-bottom: 20px; }
         .modern-label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 14px; color: #555; }
-        .modern-input, .modern-textarea { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-family: inherit; font-size: 14px; }
-        
-        .btn-submit-premium { background: #3498db; color: white; border: none; padding: 15px; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; font-size: 16px; box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3); transition: background 0.2s; }
-        .btn-submit-premium:hover { background: #2980b9; }
+        .modern-input, .modern-textarea { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-family: inherit; }
+        .btn-submit-premium { background: <?php echo $is_editing ? '#e67e22' : '#3498db'; ?>; color: white; border: none; padding: 15px; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; font-size: 16px; transition: 0.2s; }
         .btn-ai-glow { background: #8e44ad; color: white; border: none; padding: 10px 15px; border-radius: 50%; cursor: pointer; }
 
         #aiLoadingOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); z-index: 99999; color: white; flex-direction: column; justify-content: center; align-items: center; }
@@ -115,32 +132,24 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$user_id ORD
 
     <div class="main-content">
         <div class="top-header" style="display:flex; justify-content:space-between; align-items:center; background:#fff; padding:15px 20px; border-radius:8px; margin-bottom:20px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
-            <div class="greeting-box">
-                <h2 style="margin:0;"><span style="opacity:0.7;">Workspace:</span> <?php echo htmlspecialchars($_SESSION['fullname']); ?></h2>
-            </div>
+            <h2 style="margin:0;"><span style="opacity:0.7;">Workspace:</span> <?php echo htmlspecialchars($_SESSION['fullname']); ?></h2>
             <button id="themeToggle" class="theme-toggle" style="background:#ecf0f1; border:none; padding:8px 15px; border-radius:20px; cursor:pointer;"><i class="fas fa-moon"></i> Dark Mode</button>
         </div>
 
-        <?php if($msg) echo "<p style='color:green; background:#e8f8f5; padding:15px; border-radius:6px; font-weight:bold; border-left:4px solid #27ae60;'>$msg</p>"; ?>
+        <?php if($msg) echo "<p style='color:white; background:#27ae60; padding:15px; border-radius:6px; font-weight:bold;'>$msg</p>"; ?>
 
         <div class="student-grid">
-            
             <div>
                 <div class="info-panel ai-panel">
                     <h3><i class="fas fa-robot"></i> AI Pre-Evaluation</h3>
                     <p>The AI Copilot will generate a preliminary analysis of your portfolio based on the PPST once submitted.</p>
-                    <div class="status-badge" style="background:#e67e22;">Pending Submission</div>
                 </div>
-
                 <div class="info-panel human-panel">
                     <h3><i class="fas fa-user-tie"></i> Official Evaluation</h3>
                     <p>Your Cooperating Teacher and Supervisor reviews will appear here.</p>
-                    <div class="status-badge" style="background:#95a5a6;">Awaiting Review</div>
                 </div>
-                
                 <div class="info-panel" style="border-left-color: #34495e;">
                     <h3><i class="fas fa-list-ol"></i> 100-Point Grading Rubric</h3>
-                    <p style="font-size: 12px; color: #666; margin-bottom: 8px;">Ensure your lesson plan covers these required competencies:</p>
                     <ul style="font-size: 12px; color: #444; padding-left: 15px; margin: 0; line-height: 1.6;">
                         <li><strong>Objectives (20 pts):</strong> Clear, measurable, HOTS aligned.</li>
                         <li><strong>Content (20 pts):</strong> Accurate, relevant to curriculum.</li>
@@ -153,27 +162,29 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$user_id ORD
 
             <div>
                 <form method="POST" enctype="multipart/form-data" id="mainForm">
+                    <input type="hidden" name="edit_id" value="<?php echo $edit_id; ?>">
                     <div class="eval-card">
-                        <div class="ai-header-banner" style="background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);">
+                        <div class="ai-header-banner" style="background: linear-gradient(135deg, <?php echo $is_editing ? '#d35400 0%, #e67e22' : '#2c3e50 0%, #3498db'; ?> 100%);">
                             <div class="ai-header-content">
-                                <h3 style="margin:0;"><i class="fas fa-pen-nib"></i> Lesson Editor</h3>
-                                <p style="margin-top:5px;">Draft your work here and attach your evidence file.</p>
+                                <h3 style="margin:0;"><i class="fas <?php echo $is_editing ? 'fa-edit' : 'fa-pen-nib'; ?>"></i> <?php echo $is_editing ? 'Edit Submission' : 'Lesson Editor'; ?></h3>
                             </div>
                         </div>
                         <div style="padding: 25px;">
                             <div class="modern-input-group">
                                 <label class="modern-label">Submission Title</label>
-                                <input type="text" name="title" class="modern-input" value="<?php echo htmlspecialchars($title_val); ?>" required placeholder="e.g., Science Lesson Plan - Week 1">
+                                <input type="text" name="title" class="modern-input" value="<?php echo htmlspecialchars($title_val); ?>" required>
                             </div>
                             <div class="modern-input-group">
                                 <label class="modern-label">Context / Description (Analyzed by AI)</label>
-                                <textarea name="description" id="editorContent" class="modern-textarea" rows="14" placeholder="Start typing your lesson plan context, goals, or summary here..."><?php echo htmlspecialchars($desc_val); ?></textarea>
+                                <textarea name="description" id="editorContent" class="modern-textarea" rows="14" required><?php echo htmlspecialchars($desc_val); ?></textarea>
                             </div>
                             <div class="modern-input-group" style="background: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px dashed #ccc;">
-                                <label class="modern-label"><i class="fas fa-paperclip"></i> Attach File Evidence (.docx, .txt)</label>
+                                <label class="modern-label"><i class="fas fa-paperclip"></i> <?php echo $is_editing ? 'Replace File Evidence (Optional)' : 'Attach File Evidence (.docx, .txt)'; ?></label>
                                 <input type="file" name="file" class="modern-input" style="border: none; padding: 0;">
                             </div>
-                            <button type="submit" name="upload_file" class="btn-submit-premium"><i class="fas fa-cloud-upload-alt"></i> Submit Portfolio</button>
+                            <button type="submit" name="upload_file" class="btn-submit-premium">
+                                <i class="fas <?php echo $is_editing ? 'fa-save' : 'fa-cloud-upload-alt'; ?>"></i> <?php echo $is_editing ? 'Save Changes' : 'Submit Portfolio'; ?>
+                            </button>
                         </div>
                     </div>
                 </form>
@@ -196,13 +207,14 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$user_id ORD
                             <?php else: ?>
                                 <div class="message ai">
                                     <div class="sender-name">Copilot</div>
-                                    <div class="bubble">Hello! I'm here to support you. Ask me questions about your lesson plan or the 100-point rubric.</div>
+                                    <div class="bubble">Hello! Ask me questions about your lesson plan or the 100-point rubric.</div>
                                 </div>
                             <?php endif; ?>
                         </div>
                         
                         <form method="POST" id="chatForm" style="margin: 0; padding: 0;">
                             <div class="chat-input-area">
+                                <input type="hidden" name="edit_id" value="<?php echo $edit_id; ?>">
                                 <input type="hidden" name="context" id="hiddenContextForChat">
                                 <input type="text" name="message" class="modern-input" placeholder="Ask a question..." required style="margin-bottom:0; border-radius:20px; padding:10px;">
                                 <button type="submit" name="send_chat" class="btn-ai-glow"><i class="fas fa-paper-plane"></i></button>
@@ -227,22 +239,17 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$user_id ORD
 
         if(chatHistory) { chatHistory.scrollTop = chatHistory.scrollHeight; }
 
-        // Syncs the editor context to the chat form before submission
         document.getElementById('chatForm').addEventListener('submit', function() {
             if(editorContent && hiddenContext) {
                 let contextStr = "STUDENT DRAFT TEXT:\n" + editorContent.value;
-                
-                // Smart "File Warning" logic for the AI
                 const fileInput = document.querySelector('input[type="file"]');
                 if (fileInput && fileInput.files.length > 0) {
-                    contextStr += "\n\n[SYSTEM NOTE: The student has attached a file named '" + fileInput.files[0].name + "' to the form, but it has not been uploaded to the server yet. As an AI, you cannot read this local file. If the 'STUDENT DRAFT TEXT' above is empty or incomplete, politely inform the student that you cannot read attached files until they click 'Submit Portfolio', and ask them to copy-paste their lesson plan into the 'Context / Description' box so you can review it immediately.]";
+                    contextStr += "\n\n[SYSTEM NOTE: The student attached a file, but it hasn't uploaded yet. If the Draft Text above is empty, tell them you cannot read files until they submit.]";
                 }
-                
                 hiddenContext.value = contextStr;
             }
         });
 
-        // Universal Loading Screen Logic
         document.addEventListener('submit', function(e) {
             if (e.target.id === 'mainForm') {
                 document.getElementById('loadingText').innerText = 'Saving Submission...';
