@@ -52,19 +52,58 @@ $sub = $sub_q->fetch_assoc();
 $ai_scores = ['obj' => '', 'con' => '', 'meth' => '', 'ass' => '', 'fmt' => '', 'total' => ''];
 $ai_feedback = "";
 
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    if (isset($_POST['generate_ai'])) {
-        $context = "Title: " . $sub['title'] . "\nStudent Context: " . $sub['description'];
+if (isset($_POST['generate_ai'])) {
+        $context = "Title: " . $sub['title'] . "\nContext: " . $sub['description'];
         $file_content_msg = "";
         
         if (!empty($sub['file_path'])) {
-            $raw_path = $sub['file_path'];
+            $raw_path = $sub['file_path']; 
             $clean_rel_path = ltrim(str_replace(['../', '..\\'], '', $raw_path), '/\\');
             $target_full_path = __DIR__ . '/' . $clean_rel_path;
             if (!file_exists($target_full_path)) { $target_full_path = realpath($clean_rel_path); }
             $extracted_text = extractTextForEvaluation($target_full_path);
-            $file_content_msg = "\n\n=== [EVIDENCE FILE] ===\n" . $extracted_text . "\n==============================\n";
+            $file_content_msg = "\n\n=== [EVIDENCE FILE CONTENT] ===\n" . $extracted_text . "\n==============================\n";
         }
+        
+        $full_prompt = "You are a professional teacher evaluator grading a lesson plan. Use this exact 100-point rubric:
+        1. Objectives (Max 20)
+        2. Content (Max 20)
+        3. Methodology (Max 30)
+        4. Assessment (Max 20)
+        5. Formatting (Max 10)
+        
+        Student Work: " . $context . $file_content_msg . "
+        
+        RETURN ONLY VALID JSON EXACTLY LIKE THIS FORMAT. DO NOT ADD ANY OTHER TEXT:
+        {
+            \"obj\": 18,
+            \"con\": 15,
+            \"meth\": 25,
+            \"ass\": 15,
+            \"fmt\": 10,
+            \"total\": 83,
+            \"feedback\": \"Detailed feedback...\"
+        }";
+        
+        $raw_ai_text = generateAIResponse($full_prompt, 'evaluator');
+        
+        // CRITICAL FIX: The "JSON Hunter"
+        // This hunts down the JSON block even if the AI added extra conversational text
+        if (preg_match('/\{[\s\S]*\}/', $raw_ai_text, $matches)) {
+            $json_string = $matches[0];
+            $parsed = json_decode($json_string, true);
+            
+            if ($parsed && isset($parsed['total'])) {
+                $ai_scores = $parsed;
+                $ai_feedback = $parsed['feedback'];
+            } else {
+                $ai_feedback = "AI JSON Error. Could not decode the math. Raw output: " . $json_string;
+            }
+        } else {
+            $ai_feedback = "AI failed to return the scoring format. Raw output: " . $raw_ai_text;
+        }
+
+    }
         
         // STRICT JSON RUBRIC PROMPT
         $full_prompt = "You are a master curriculum evaluator grading a lesson plan. Use this exact 100-point rubric:
