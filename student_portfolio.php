@@ -9,6 +9,28 @@ $user_id = $_SESSION['user_id'];
 $msg = "";
 $title_val = ""; $desc_val = "";
 
+// --- SYNCHRONOUS CHAT LOGIC ---
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['send_chat'])) {
+    $message = trim($_POST['message'] ?? '');
+    $context = $_POST['context'] ?? '';
+    
+    if (!empty($message)) {
+        $stmt = $conn->prepare("INSERT INTO chat_logs (user_id, sender, message) VALUES (?, 'user', ?)");
+        $stmt->bind_param("is", $user_id, $message);
+        $stmt->execute();
+
+        $full_prompt = "Context:\n$context\n\nUser Question: $message";
+        $ai_response = generateAIResponse($full_prompt, 'mentor');
+
+        $stmt = $conn->prepare("INSERT INTO chat_logs (user_id, sender, message) VALUES (?, 'ai', ?)");
+        $stmt->bind_param("is", $user_id, $ai_response);
+        $stmt->execute();
+
+        header("Location: " . $_SERVER['REQUEST_URI']);
+        exit();
+    }
+}
+
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['upload_file'])) {
     $title_val = $_POST['title'];
     $desc_val = $_POST['description'];
@@ -48,27 +70,13 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$user_id ORD
     <link rel="stylesheet" href="css/style.css?v=<?php echo time(); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        /* DASHBOARD LAYOUT */
         body { display: flex; height: 100vh; overflow: hidden; margin: 0; background: #f4f7f6; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         .main-content { flex: 1; padding: 30px; overflow-y: auto; height: 100vh; box-sizing: border-box; }
-        
-        /* STRICT 3-COLUMN GRID FOR STUDENT PAGE */
-        .student-grid { 
-            display: grid; 
-            grid-template-columns: 280px minmax(350px, 1fr) 380px; 
-            gap: 25px; 
-            margin-top: 20px; 
-            align-items: start; 
-        }
-        
-        /* If screen is small, stack it so it doesn't disappear */
-        @media (max-width: 1200px) { 
-            .student-grid { grid-template-columns: 1fr; } 
-        }
+        .student-grid { display: grid; grid-template-columns: 280px minmax(350px, 1fr) 380px; gap: 25px; margin-top: 20px; align-items: start; }
+        @media (max-width: 1200px) { .student-grid { grid-template-columns: 1fr; } }
         
         .card { background: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 25px; }
         .eval-card { background: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); overflow: hidden; }
-        
         .info-panel { background: #fff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 20px; border-left: 4px solid #3498db; margin-bottom: 20px; }
         .info-panel.ai-panel { border-left-color: #9b59b6; }
         .info-panel.human-panel { border-left-color: #2ecc71; }
@@ -77,26 +85,21 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$user_id ORD
         .status-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; background: #f1c40f; color: #fff; margin-top: 10px; }
         
         .ai-header-banner { padding: 20px; color: white; display: flex; justify-content: space-between; align-items: center; }
-        .ai-header-banner h3 { margin: 0 0 5px 0; font-size: 18px; }
-        .ai-header-banner p { margin: 0; font-size: 13px; opacity: 0.9; }
-        
         .chat-container { display: flex; flex-direction: column; height: 600px; background: #fdfbfb; }
         .chat-history { flex: 1; overflow-y: auto; padding: 20px; border-bottom: 1px solid #eee; }
         .chat-input-area { padding: 15px; background: #fff; display: flex; gap: 10px; align-items: center; border-top: 1px solid #eee; }
         .message { margin-bottom: 15px; display: flex; flex-direction: column; }
         .message.user { align-items: flex-end; }
         .message.ai { align-items: flex-start; }
-        .bubble { max-width: 85%; padding: 12px 16px; border-radius: 12px; font-size: 14px; line-height: 1.5; position: relative; }
+        .bubble { max-width: 85%; padding: 12px 16px; border-radius: 12px; font-size: 14px; line-height: 1.5; word-wrap: break-word;}
         .message.user .bubble { background: linear-gradient(135deg, #8e44ad 0%, #9b59b6 100%); color: white; border-bottom-right-radius: 2px; }
         .message.ai .bubble { background: #e9ecef; color: #333; border-bottom-left-radius: 2px; }
         .sender-name { font-size: 11px; margin-bottom: 4px; opacity: 0.6; }
-        .typing-indicator { display: none; padding: 10px 20px; font-style: italic; color: #888; font-size: 12px; background:#fff;}
         
         .modern-input-group { margin-bottom: 20px; }
         .modern-label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 14px; color: #555; }
         .modern-input, .modern-textarea { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-family: inherit; font-size: 14px; }
         
-        /* Submit Button Styling */
         .btn-submit-premium { background: #3498db; color: white; border: none; padding: 15px; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; font-size: 16px; box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3); transition: background 0.2s; }
         .btn-submit-premium:hover { background: #2980b9; }
         .btn-ai-glow { background: #8e44ad; color: white; border: none; padding: 10px 15px; border-radius: 50%; cursor: pointer; }
@@ -198,14 +201,13 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$user_id ORD
                             <?php endif; ?>
                         </div>
                         
-                        <div class="typing-indicator" id="typingIndicator">
-                            <i class="fas fa-circle-notch fa-spin"></i> Copilot is thinking...
-                        </div>
-                        
-                        <div class="chat-input-area">
-                            <input type="text" id="chatInput" class="modern-input" placeholder="Ask a question..." required style="margin-bottom:0; border-radius:20px;">
-                            <button type="button" id="sendChatBtn" onclick="sendMessage()" class="btn-ai-glow"><i class="fas fa-paper-plane"></i></button>
-                        </div>
+                        <form method="POST" id="chatForm" style="margin: 0; padding: 0;">
+                            <div class="chat-input-area">
+                                <input type="hidden" name="context" id="hiddenContextForChat">
+                                <input type="text" name="message" class="modern-input" placeholder="Ask a question..." required style="margin-bottom:0; border-radius:20px;">
+                                <button type="submit" name="send_chat" class="btn-ai-glow"><i class="fas fa-paper-plane"></i></button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             </div>
@@ -215,87 +217,31 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$user_id ORD
 
     <div id="aiLoadingOverlay">
         <div class="ai-spinner"></div>
-        <h2>Saving Submission...</h2>
-        <p style="color:#ccc;">Please do not close this page.</p>
+        <h2 id="loadingText">Processing...</h2>
     </div>
 
     <script>
         const chatHistory = document.getElementById('chatHistory');
-        const chatInput = document.getElementById('chatInput');
-        const sendBtn = document.getElementById('sendChatBtn');
         const editorContent = document.getElementById('editorContent');
-        const typingIndicator = document.getElementById('typingIndicator');
+        const hiddenContext = document.getElementById('hiddenContextForChat');
 
         if(chatHistory) { chatHistory.scrollTop = chatHistory.scrollHeight; }
 
-        if(chatInput) {
-            chatInput.addEventListener("keydown", function(event) {
-                if (event.key === "Enter") { 
-                    event.preventDefault(); 
-                    sendMessage(); 
-                    return false;
-                }
-            });
-        }
+        // Syncs the editor context to the chat form before submission
+        document.getElementById('chatForm').addEventListener('submit', function() {
+            if(editorContent && hiddenContext) {
+                hiddenContext.value = "STUDENT DRAFT:\n" + editorContent.value;
+            }
+        });
 
-        function sendMessage() {
-            const message = chatInput.value.trim();
-            const contextText = editorContent ? editorContent.value : ""; 
-
-            if (message === "") return;
-
-            chatInput.disabled = true; sendBtn.disabled = true;
-
-            addMessageToUI('You', message, 'user');
-            chatInput.value = '';
-            typingIndicator.style.display = 'block';
-
-            const payload = {
-                message: message,
-                context: contextText,
-                mode: 'mentor'
-            };
-
-            fetch('api_chat.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload) 
-            })
-            .then(response => {
-                if (!response.ok) throw new Error('Network error');
-                return response.json();
-            })
-            .then(data => {
-                if(data.error === "SESSION_EXPIRED") {
-                     addMessageToUI('System', 'Your session has expired. Please refresh the page to continue.', 'ai');
-                } else if(data.reply) {
-                     addMessageToUI('Copilot', data.reply, 'ai');
-                } else {
-                     addMessageToUI('System', 'Error: ' + (data.error || 'Unknown error'), 'ai');
-                }
-            })
-            .catch(error => {
-                addMessageToUI('System', 'Network error or Server blocked the request.', 'ai');
-            })
-            .finally(() => {
-                typingIndicator.style.display = 'none';
-                chatInput.disabled = false; sendBtn.disabled = false;
-                chatInput.focus();
-            });
-        }
-
-        function addMessageToUI(sender, text, type) {
-            const msgDiv = document.createElement('div');
-            msgDiv.classList.add('message', type);
-            msgDiv.innerHTML = `<div class="sender-name">${sender}</div><div class="bubble">${text.replace(/\n/g, "<br>")}</div>`;
-            chatHistory.appendChild(msgDiv);
-            chatHistory.scrollTop = chatHistory.scrollHeight;
-        }
-
+        // Universal Loading Screen Logic
         document.addEventListener('submit', function(e) {
             if (e.target.id === 'mainForm') {
-                document.getElementById('aiLoadingOverlay').style.display = 'flex';
+                document.getElementById('loadingText').innerText = 'Saving Submission...';
+            } else if (e.target.id === 'chatForm') {
+                document.getElementById('loadingText').innerText = 'Copilot is thinking...';
             }
+            document.getElementById('aiLoadingOverlay').style.display = 'flex';
         });
     </script>
 </body>
