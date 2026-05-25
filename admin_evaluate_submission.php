@@ -32,13 +32,13 @@ function extractTextForEvaluation($filePath) {
         return "[SYSTEM NOTE: File type .$ext not supported.]";
     }
 
-    // CRITICAL FIX: Scrub all invisible/bad characters that crash the Google API
+    // Scrub all invisible/bad characters that crash the Google API
     $text = preg_replace('/[\x00-\x1F\x7F]/u', ' ', $text); 
     $text = mb_convert_encoding($text, 'UTF-8', 'UTF-8');
     
-    // Limit to 15,000 characters to prevent API overload
     return substr(trim($text), 0, 15000); 
 }
+
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') { header("Location: index.php"); exit(); }
 
 $admin_id = $_SESSION['user_id'];
@@ -48,11 +48,11 @@ $sub_q = $conn->query("SELECT s.*, u.fullname FROM submissions s JOIN users u ON
 if($sub_q->num_rows == 0) { header("Location: admin_dashboard.php"); exit(); }
 $sub = $sub_q->fetch_assoc();
 
-// Default Empty AI Rubric Values
 $ai_scores = ['obj' => '', 'con' => '', 'meth' => '', 'ass' => '', 'fmt' => '', 'total' => ''];
 $ai_feedback = "";
 
-if (isset($_POST['generate_ai'])) {
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    if (isset($_POST['generate_ai'])) {
         $context = "Title: " . $sub['title'] . "\nContext: " . $sub['description'];
         $file_content_msg = "";
         
@@ -87,8 +87,6 @@ if (isset($_POST['generate_ai'])) {
         
         $raw_ai_text = generateAIResponse($full_prompt, 'evaluator');
         
-        // CRITICAL FIX: The "JSON Hunter"
-        // This hunts down the JSON block even if the AI added extra conversational text
         if (preg_match('/\{[\s\S]*\}/', $raw_ai_text, $matches)) {
             $json_string = $matches[0];
             $parsed = json_decode($json_string, true);
@@ -101,40 +99,6 @@ if (isset($_POST['generate_ai'])) {
             }
         } else {
             $ai_feedback = "AI failed to return the scoring format. Raw output: " . $raw_ai_text;
-        }
-
-    }
-        
-        // STRICT JSON RUBRIC PROMPT
-        $full_prompt = "You are a master curriculum evaluator grading a lesson plan. Use this exact 100-point rubric:
-        1. Objectives (Max 20) - clear, measurable HOTS.
-        2. Content (Max 20) - accurate, relevant.
-        3. Methodology (Max 30) - engaging, well-structured.
-        4. Assessment (Max 20) - aligns with objectives.
-        5. Formatting (Max 10) - professional standard.
-        
-        Student Work: " . $context . $file_content_msg . "
-        
-        RETURN ONLY VALID JSON EXACTLY LIKE THIS FORMAT:
-        {
-            \"obj\": 18,
-            \"con\": 15,
-            \"meth\": 25,
-            \"ass\": 15,
-            \"fmt\": 10,
-            \"total\": 83,
-            \"feedback\": \"Detailed feedback...\"
-        }";
-
-        $raw_ai_text = generateAIResponse($full_prompt, 'evaluator');
-        $raw_ai_text = preg_replace('/```json|```/', '', $raw_ai_text); // Clean markdown
-        $parsed = json_decode(trim($raw_ai_text), true);
-
-        if ($parsed && isset($parsed['total'])) {
-            $ai_scores = $parsed;
-            $ai_feedback = $parsed['feedback'];
-        } else {
-            $ai_feedback = "AI failed to return proper math. Raw output: " . $raw_ai_text;
         }
 
     } elseif (isset($_POST['submit_grade'])) {
@@ -165,7 +129,6 @@ if (isset($_POST['generate_ai'])) {
 }
 $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$admin_id ORDER BY created_at ASC");
 
-// --- FILE EXISTENCE CHECKER FIX ---
 $file_url = htmlspecialchars($sub['file_path']);
 $actual_path = __DIR__ . '/' . ltrim(str_replace(['../', '..\\'], '', $sub['file_path']), '/\\');
 $file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
@@ -186,7 +149,6 @@ $file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
         .eval-card { background: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); overflow: hidden; }
         .ai-header-banner { padding: 20px; color: white; display: flex; justify-content: space-between; align-items: center; }
         
-        /* DUAL RUBRIC CSS */
         .dual-rubric { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
         .rubric-side { background: #f8f9fa; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; }
         .rubric-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 13px; }
@@ -208,7 +170,6 @@ $file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
         .modern-label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 13px; color: #555; }
         .modern-textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-family: inherit; }
         
-        /* NEW BUTTON STYLES */
         .action-container { display: flex; flex-direction: column; gap: 15px; margin-top: 20px; border-top: 2px dashed #eee; padding-top: 20px; }
         .btn-run-ai { background: linear-gradient(135deg, #8e44ad 0%, #9b59b6 100%); color: white; border: none; padding: 15px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 15px; display: flex; justify-content: center; align-items: center; gap: 10px; box-shadow: 0 4px 15px rgba(142, 68, 173, 0.3); transition: transform 0.2s; }
         .btn-run-ai:hover { transform: translateY(-2px); }
@@ -320,7 +281,7 @@ $file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
                                     <div class="bubble"><?php echo nl2br(htmlspecialchars($chat['message'])); ?></div>
                                 </div>
                             <?php endwhile; else: ?>
-                                <div class="message ai"><div class="sender-name">Consultant</div><div class="bubble">Hello Admin. I can read the student's context description. How can I help?</div></div>
+                                <div class="message ai"><div class="sender-name">Consultant</div><div class="bubble">Hello Administrator. I can read the student's context description. How can I help?</div></div>
                             <?php endif; ?>
                         </div>
                         <div class="typing-indicator" id="typingIndicator"><i class="fas fa-circle-notch fa-spin"></i> Consulting...</div>
