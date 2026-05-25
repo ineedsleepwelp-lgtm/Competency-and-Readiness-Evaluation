@@ -32,11 +32,10 @@ function extractTextForEvaluation($filePath) {
         return "[SYSTEM NOTE: File type .$ext not supported.]";
     }
 
-    // CRITICAL FIX: Scrub all invisible/bad characters that crash the Google API
+    // Scrub all invisible/bad characters that crash the Google API
     $text = preg_replace('/[\x00-\x1F\x7F]/u', ' ', $text); 
     $text = mb_convert_encoding($text, 'UTF-8', 'UTF-8');
     
-    // Limit to 15,000 characters to prevent API overload
     return substr(trim($text), 0, 15000); 
 }
 
@@ -52,9 +51,21 @@ $sub = $sub_q->fetch_assoc();
 $ai_scores = ['obj' => '', 'con' => '', 'meth' => '', 'ass' => '', 'fmt' => '', 'total' => ''];
 $ai_feedback = "";
 
-v
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    if (isset($_POST['generate_ai'])) {
+        $context = "Title: " . $sub['title'] . "\nContext: " . $sub['description'];
+        $file_content_msg = "";
         
-        $full_prompt = "You are a Supervisor grading a student. Use this exact 100-point rubric:
+        if (!empty($sub['file_path'])) {
+            $raw_path = $sub['file_path']; 
+            $clean_rel_path = ltrim(str_replace(['../', '..\\'], '', $raw_path), '/\\');
+            $target_full_path = __DIR__ . '/' . $clean_rel_path;
+            if (!file_exists($target_full_path)) { $target_full_path = realpath($clean_rel_path); }
+            $extracted_text = extractTextForEvaluation($target_full_path);
+            $file_content_msg = "\n\n=== [EVIDENCE FILE CONTENT] ===\n" . $extracted_text . "\n==============================\n";
+        }
+        
+        $full_prompt = "You are a professional teacher evaluator grading a lesson plan. Use this exact 100-point rubric:
         1. Objectives (Max 20)
         2. Content (Max 20)
         3. Methodology (Max 30)
@@ -63,7 +74,7 @@ v
         
         Student Work: " . $context . $file_content_msg . "
         
-        RETURN ONLY VALID JSON EXACTLY LIKE THIS FORMAT:
+        RETURN ONLY VALID JSON EXACTLY LIKE THIS FORMAT. DO NOT ADD ANY OTHER TEXT:
         {
             \"obj\": 18,
             \"con\": 15,
@@ -75,44 +86,48 @@ v
         }";
         
         $raw_ai_text = generateAIResponse($full_prompt, 'evaluator');
-        $raw_ai_text = preg_replace('/```json|```/', '', $raw_ai_text);
-        $parsed = json_decode(trim($raw_ai_text), true);
-
-        if ($parsed && isset($parsed['total'])) {
-            $ai_scores = $parsed;
-            $ai_feedback = $parsed['feedback'];
+        
+        if (preg_match('/\{[\s\S]*\}/', $raw_ai_text, $matches)) {
+            $json_string = $matches[0];
+            $parsed = json_decode($json_string, true);
+            
+            if ($parsed && isset($parsed['total'])) {
+                $ai_scores = $parsed;
+                $ai_feedback = $parsed['feedback'];
+            } else {
+                $ai_feedback = "AI JSON Error. Could not decode the math. Raw output: " . $json_string;
+            }
         } else {
-            $ai_feedback = "AI failed to return proper math. Raw output: " . $raw_ai_text;
+            $ai_feedback = "AI failed to return the scoring format. Raw output: " . $raw_ai_text;
         }
 
     } elseif (isset($_POST['submit_grade'])) {
         $eval_title = $_POST['eval_title']; 
         $score = $_POST['human_total']; 
         
-        $notes = "RUBRIC BREAKDOWN:\nObjectives: " . $_POST['human_obj'] . "/20\nContent: " . $_POST['human_con'] . "/20\nMethodology: " . $_POST['human_meth'] . "/30\nAssessment: " . $_POST['human_ass'] . "/20\nFormatting: " . $_POST['human_fmt'] . "/10\n\nFEEDBACK:\n" . $_POST['notes'];
+        $notes = "RUBRIC BREAKDOWN:\nObjectives: " . $_POST['human_obj'] . "/20\nContent: " . $_POST['human_con'] . "/20\nMethodology: " . $_POST['human_meth'] . "/30\nAssessment: " . $_POST['human_ass'] . "/20\nFormatting: " . $_POST['human_fmt'] . "/10\n\nFEEDBACK:\n" . $_POST['notes']; 
         
         $student_id = $sub['user_id'];
         $target_file = $sub['file_path'];
-        
+
         if (!empty($_FILES['file']['name'])) {
             $target_dir = "uploads/";
             $target_file = $target_dir . "eval_" . time() . "_" . basename($_FILES["file"]["name"]);
             move_uploaded_file($_FILES["file"]["tmp_name"], $target_file);
         }
-        
+
         $stmt = $conn->prepare("INSERT INTO evaluations (user_id, evaluator_id, submission_id, evaluation_title, competency_score, readiness_notes, file_path, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')");
         $stmt->bind_param("iiisiss", $student_id, $supervisor_id, $sub_id, $eval_title, $score, $notes, $target_file);
         
-        if($stmt->execute()) { 
-            $conn->query("UPDATE submissions SET status='evaluated' WHERE id=$sub_id"); 
+        if($stmt->execute()) {
+            $conn->query("UPDATE submissions SET status='evaluated' WHERE id=$sub_id");
             header("Location: supervisor_dashboard.php"); 
-            exit(); 
+            exit();
         }
     }
 }
 $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$supervisor_id ORDER BY created_at ASC");
 
-// --- CORRECTED FILE CHECK ---
 $file_url = htmlspecialchars($sub['file_path']);
 $actual_path = __DIR__ . '/' . ltrim(str_replace(['../', '..\\'], '', $sub['file_path']), '/\\');
 $file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
@@ -203,8 +218,12 @@ $file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
                         <div class="ai-header-banner" style="background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);">
                             <div class="ai-header-content"><h3 style="margin:0;"><i class="fas fa-tasks"></i> 100-Point Evaluation</h3></div>
                         </div>
+                        
                         <div class="eval-body" style="padding:25px;">
-                            <input type="hidden" name="eval_title" value="Supervisor Official Evaluation">
+                            <div class="modern-input-group">
+                                <label class="modern-label">Evaluation Title</label>
+                                <input type="text" name="eval_title" class="modern-textarea" value="Supervisor Official Evaluation" required>
+                            </div>
                             
                             <div class="dual-rubric">
                                 <div class="rubric-side">
@@ -273,6 +292,7 @@ $file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
                     </div>
                 </div>
             </div>
+
         </div>
     </div>
 
