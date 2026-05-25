@@ -15,9 +15,8 @@ function extractTextForEvaluation($filePath) {
 
     if ($ext === 'docx') {
         if (!class_exists('ZipArchive')) {
-            return "[SYSTEM ALERT: The PHP ZipArchive extension is disabled on this server. The system cannot pry open DOCX files to read the text inside.]";
+            return "[SYSTEM ALERT: The PHP ZipArchive extension is disabled on this server. The system cannot pry open DOCX files.]";
         }
-        
         $zip = new ZipArchive;
         if ($zip->open($filePath) === TRUE) {
             if (($index = $zip->locateName('word/document.xml')) !== false) {
@@ -26,11 +25,11 @@ function extractTextForEvaluation($filePath) {
                 $dom->loadXML($xml, LIBXML_NOENT | LIBXML_XINCLUDE | LIBXML_NOERROR | LIBXML_NOWARNING);
                 $text = strip_tags($dom->saveXML());
             } else {
-                return "[SYSTEM ALERT: The DOCX file was opened, but the internal document structure is empty or invalid.]";
+                return "[SYSTEM ALERT: The DOCX file was opened, but the internal document structure is empty.]";
             }
             $zip->close();
         } else {
-            return "[SYSTEM ALERT: Failed to open DOCX file. It may be corrupted or securely locked.]";
+            return "[SYSTEM ALERT: Failed to open DOCX file. It may be corrupted.]";
         }
     } elseif ($ext === 'txt') {
         $text = file_get_contents($filePath);
@@ -38,7 +37,6 @@ function extractTextForEvaluation($filePath) {
         return "[SYSTEM NOTE: File type .$ext not supported.]";
     }
 
-    // Scrub all invisible/bad characters that crash the Google API
     $text = preg_replace('/[\x00-\x1F\x7F]/u', ' ', $text); 
     $text = mb_convert_encoding($text, 'UTF-8', 'UTF-8');
     $text = trim($text);
@@ -46,7 +44,6 @@ function extractTextForEvaluation($filePath) {
     if (empty($text)) {
         return "[SYSTEM ALERT: The file was opened successfully, but no readable text was found inside.]";
     }
-    
     return substr($text, 0, 15000); 
 }
 
@@ -58,6 +55,19 @@ $sub_id = isset($_GET['sub_id']) ? intval($_GET['sub_id']) : 0;
 $sub_q = $conn->query("SELECT s.*, u.fullname FROM submissions s JOIN users u ON s.user_id = u.id WHERE s.id=$sub_id");
 if($sub_q->num_rows == 0) { header("Location: supervisor_dashboard.php"); exit(); }
 $sub = $sub_q->fetch_assoc();
+
+// --- PRE-EXTRACT CONTEXT FOR BOTH CHAT AND AI ANALYZER ---
+$extracted_file_text = "";
+$file_content_msg = "";
+$actual_path = __DIR__ . '/' . ltrim(str_replace(['../', '..\\'], '', $sub['file_path']), '/\\');
+
+if (!empty($sub['file_path']) && file_exists($actual_path)) {
+    $extracted_file_text = extractTextForEvaluation($actual_path);
+    $file_content_msg = "\n\n=== [EVIDENCE FILE CONTENT] ===\n" . $extracted_file_text . "\n==============================\n";
+}
+
+$master_context = "Title: " . $sub['title'] . "\nStudent Context Description: " . $sub['description'] . $file_content_msg;
+// ---------------------------------------------------------
 
 $ai_scores = ['obj' => '', 'con' => '', 'meth' => '', 'ass' => '', 'fmt' => '', 'total' => ''];
 $ai_feedback = "";
@@ -86,18 +96,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['send_chat'])) {
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     if (isset($_POST['generate_ai'])) {
-        $context = "Title: " . $sub['title'] . "\nContext: " . $sub['description'];
-        $file_content_msg = "";
-        
-        if (!empty($sub['file_path'])) {
-            $raw_path = $sub['file_path']; 
-            $clean_rel_path = ltrim(str_replace(['../', '..\\'], '', $raw_path), '/\\');
-            $target_full_path = __DIR__ . '/' . $clean_rel_path;
-            if (!file_exists($target_full_path)) { $target_full_path = realpath($clean_rel_path); }
-            $extracted_text = extractTextForEvaluation($target_full_path);
-            $file_content_msg = "\n\n=== [EVIDENCE FILE CONTENT] ===\n" . $extracted_text . "\n==============================\n";
-        }
-        
         $full_prompt = "You are a professional teacher evaluator grading a lesson plan. Use this exact 100-point rubric:
         1. Objectives (Max 20)
         2. Content (Max 20)
@@ -105,7 +103,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         4. Assessment (Max 20)
         5. Formatting (Max 10)
         
-        Student Work: " . $context . $file_content_msg . "
+        Student Work: " . $master_context . "
         
         RETURN ONLY VALID JSON EXACTLY LIKE THIS FORMAT. DO NOT ADD ANY OTHER TEXT:
         {
@@ -123,7 +121,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         if (preg_match('/\{[\s\S]*\}/', $raw_ai_text, $matches)) {
             $json_string = $matches[0];
             $parsed = json_decode($json_string, true);
-            
             if ($parsed && isset($parsed['total'])) {
                 $ai_scores = $parsed;
                 $ai_feedback = $parsed['feedback'];
@@ -137,7 +134,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     } elseif (isset($_POST['submit_grade'])) {
         $eval_title = $_POST['eval_title']; 
         $score = $_POST['human_total']; 
-        
         $notes = "RUBRIC BREAKDOWN:\nObjectives: " . $_POST['human_obj'] . "/20\nContent: " . $_POST['human_con'] . "/20\nMethodology: " . $_POST['human_meth'] . "/30\nAssessment: " . $_POST['human_ass'] . "/20\nFormatting: " . $_POST['human_fmt'] . "/10\n\nFEEDBACK:\n" . $_POST['notes']; 
         
         $student_id = $sub['user_id'];
@@ -160,9 +156,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     }
 }
 $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$supervisor_id ORDER BY created_at ASC");
-
 $file_url = htmlspecialchars($sub['file_path']);
-$actual_path = __DIR__ . '/' . ltrim(str_replace(['../', '..\\'], '', $sub['file_path']), '/\\');
 $file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
 ?>
 <!DOCTYPE html>
@@ -177,7 +171,7 @@ $file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
         .eval-grid { display: flex; flex-wrap: wrap; gap: 25px; margin-top: 20px; align-items: flex-start; }
         .column-left { flex: 1; min-width: 500px; display: flex; flex-direction: column; gap: 20px; }
         .column-right { width: 380px; flex-shrink: 0; }
-        .card { background: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 25px; box-sizing: border-box;}
+        .card { background: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 25px; box-sizing: border-box; }
         .eval-card { background: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); overflow: hidden; }
         .ai-header-banner { padding: 20px; color: white; display: flex; justify-content: space-between; align-items: center; }
         
@@ -318,13 +312,13 @@ $file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
                                     <div class="bubble"><?php echo nl2br(htmlspecialchars($chat['message'])); ?></div>
                                 </div>
                             <?php endwhile; else: ?>
-                                <div class="message ai"><div class="sender-name">Consultant</div><div class="bubble">Hello Supervisor. I can read the student's context description. How can I help?</div></div>
+                                <div class="message ai"><div class="sender-name">Consultant</div><div class="bubble">Hello Supervisor. I can read the student's context description and attached files. How can I help?</div></div>
                             <?php endif; ?>
                         </div>
                         
                         <form method="POST" id="chatForm" style="margin: 0; padding: 0;">
                             <div class="chat-input-area">
-                                <input type="hidden" name="context" value="STUDENT SUBMISSION:\n<?php echo htmlspecialchars($sub['description']); ?>">
+                                <input type="hidden" name="context" value="<?php echo htmlspecialchars($master_context); ?>">
                                 <input type="text" name="message" class="modern-textarea" placeholder="Ask a question..." required style="margin-bottom:0; border-radius:20px; padding:10px;">
                                 <button type="submit" name="send_chat" class="btn-ai-glow" style="background:#8e44ad;"><i class="fas fa-paper-plane"></i></button>
                             </div>
@@ -367,7 +361,6 @@ $file_is_missing = !empty($sub['file_path']) && !file_exists($actual_path);
         const chatHistory = document.getElementById('chatHistory');
         if(chatHistory) { chatHistory.scrollTop = chatHistory.scrollHeight; }
 
-        // Handles loading screens universally AFTER HTML5 validation passes
         document.addEventListener('submit', function(e) {
             if (e.target.id === 'mainForm') {
                 if (e.submitter && e.submitter.name === 'generate_ai') {
