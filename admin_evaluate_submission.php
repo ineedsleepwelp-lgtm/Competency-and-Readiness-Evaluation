@@ -4,13 +4,13 @@ include __DIR__ . '/db_connect.php';
 include __DIR__ . '/ai_helper.php';
 
 function extractTextForEvaluation($filePath) {
-    if (!file_exists($filePath)) { return "[ERROR: File not found on server]"; }
+    if (!file_exists($filePath)) { return "[SYSTEM ALERT: File missing from server disk.]"; }
     
     $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+    $text = "";
     
-    // IF IT'S A PDF, WE CAN'T READ IT WITH STANDARD PHP
     if ($ext === 'pdf') {
-        return "[SYSTEM ALERT: PDF uploaded. Our system requires .docx or .txt files for AI analysis. Please download and review manually.]";
+        return "[SYSTEM ALERT: PDF uploaded. AI cannot natively read PDFs. Please review manually.]";
     }
 
     if ($ext === 'docx') {
@@ -21,14 +21,23 @@ function extractTextForEvaluation($filePath) {
                     $xml = $zip->getFromIndex($index);
                     $dom = new DOMDocument;
                     $dom->loadXML($xml, LIBXML_NOENT | LIBXML_XINCLUDE | LIBXML_NOERROR | LIBXML_NOWARNING);
-                    return strip_tags($dom->saveXML());
+                    $text = strip_tags($dom->saveXML());
                 }
+                $zip->close();
             }
         }
     } elseif ($ext === 'txt') {
-        return file_get_contents($filePath);
+        $text = file_get_contents($filePath);
+    } else {
+        return "[SYSTEM NOTE: File type .$ext not supported.]";
     }
-    return "[ERROR: Unsupported file format: $ext]";
+
+    // CRITICAL FIX: Scrub all invisible/bad characters that crash the Google API
+    $text = preg_replace('/[\x00-\x1F\x7F]/u', ' ', $text); 
+    $text = mb_convert_encoding($text, 'UTF-8', 'UTF-8');
+    
+    // Limit to 15,000 characters to prevent API overload
+    return substr(trim($text), 0, 15000); 
 }
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') { header("Location: index.php"); exit(); }
 
