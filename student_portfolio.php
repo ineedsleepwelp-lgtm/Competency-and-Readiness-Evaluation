@@ -204,7 +204,7 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$user_id ORD
                         <form method="POST" id="chatForm" style="margin: 0; padding: 0;">
                             <div class="chat-input-area">
                                 <input type="hidden" name="context" id="hiddenContextForChat">
-                                <input type="text" name="message" class="modern-input" placeholder="Ask a question..." required style="margin-bottom:0; border-radius:20px;">
+                                <input type="text" name="message" class="modern-input" placeholder="Ask a question..." required style="margin-bottom:0; border-radius:20px; padding:10px;">
                                 <button type="submit" name="send_chat" class="btn-ai-glow"><i class="fas fa-paper-plane"></i></button>
                             </div>
                         </form>
@@ -230,7 +230,15 @@ $chat_history = $conn->query("SELECT * FROM chat_logs WHERE user_id=$user_id ORD
         // Syncs the editor context to the chat form before submission
         document.getElementById('chatForm').addEventListener('submit', function() {
             if(editorContent && hiddenContext) {
-                hiddenContext.value = "STUDENT DRAFT:\n" + editorContent.value;
+                let contextStr = "STUDENT DRAFT TEXT:\n" + editorContent.value;
+                
+                // Smart "File Warning" logic for the AI
+                const fileInput = document.querySelector('input[type="file"]');
+                if (fileInput && fileInput.files.length > 0) {
+                    contextStr += "\n\n[SYSTEM NOTE: The student has attached a file named '" + fileInput.files[0].name + "' to the form, but it has not been uploaded to the server yet. As an AI, you cannot read this local file. If the 'STUDENT DRAFT TEXT' above is empty or incomplete, politely inform the student that you cannot read attached files until they click 'Submit Portfolio', and ask them to copy-paste their lesson plan into the 'Context / Description' box so you can review it immediately.]";
+                }
+                
+                hiddenContext.value = contextStr;
             }
         });
 
