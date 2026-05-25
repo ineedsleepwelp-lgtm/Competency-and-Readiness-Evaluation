@@ -52,19 +52,7 @@ $sub = $sub_q->fetch_assoc();
 $ai_scores = ['obj' => '', 'con' => '', 'meth' => '', 'ass' => '', 'fmt' => '', 'total' => ''];
 $ai_feedback = "";
 
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    if (isset($_POST['generate_ai'])) {
-        $context = "Title: " . $sub['title'] . "\nContext: " . $sub['description'];
-        $file_content_msg = "";
-        
-        if (!empty($sub['file_path'])) {
-            $raw_path = $sub['file_path']; 
-            $clean_rel_path = ltrim(str_replace(['../', '..\\'], '', $raw_path), '/\\');
-            $target_full_path = __DIR__ . '/' . $clean_rel_path;
-            if (!file_exists($target_full_path)) { $target_full_path = realpath($clean_rel_path); }
-            $extracted_text = extractTextForEvaluation($target_full_path);
-            $file_content_msg = "\n\n=== [EVIDENCE FILE] ===\n" . $extracted_text . "\n==============================\n";
-        }
+v
         
         $full_prompt = "You are a Supervisor grading a student. Use this exact 100-point rubric:
         1. Objectives (Max 20)
